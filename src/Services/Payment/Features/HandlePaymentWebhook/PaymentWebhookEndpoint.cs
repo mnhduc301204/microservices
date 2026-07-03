@@ -10,8 +10,9 @@ public static class PaymentWebhookEndpoint
             PaymentWebhookCommand command,
             PaymentDbContext dbContext,
             IConfiguration configuration,
+            IHostEnvironment environment,
             CancellationToken cancellationToken) =>
-            await new PaymentWebhookHandler(dbContext, configuration).Handle(command, cancellationToken));
+            await new PaymentWebhookHandler(dbContext, configuration, environment).Handle(command, cancellationToken));
 
         return group;
     }

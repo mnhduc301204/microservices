@@ -16,7 +16,7 @@ public sealed class OrderCreatedConsumer(InventoryDbContext dbContext) : IConsum
     public async Task Consume(ConsumeContext<OrderCreatedIntegrationEvent> context)
     {
         var message = context.Message;
-        if (await dbContext.HasProcessedAsync(message.EventId, ConsumerName, context.CancellationToken))
+        if (!await dbContext.TryBeginProcessingAsync(message.EventId, ConsumerName, context.CancellationToken))
         {
             return;
         }
@@ -31,11 +31,20 @@ public sealed class OrderCreatedConsumer(InventoryDbContext dbContext) : IConsum
             })
             .ToArray();
 
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(context.CancellationToken);
+
         foreach (var line in normalizedLines)
         {
-            var item = await dbContext.Items.FirstOrDefaultAsync(item => item.Sku == line.Sku, context.CancellationToken);
-            if (item is null || item.AvailableQuantity < line.Quantity)
+            var reserved = await dbContext.Items
+                .Where(item => item.Sku == line.Sku && item.QuantityOnHand - item.QuantityReserved >= line.Quantity)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(item => item.QuantityReserved, item => item.QuantityReserved + line.Quantity), context.CancellationToken);
+
+            if (reserved == 0)
             {
+                await transaction.RollbackAsync(context.CancellationToken);
+                dbContext.ChangeTracker.Clear();
+
                 dbContext.Set<OutboxMessage>().Add(OutboxMessage.Create(
                     KafkaTopics.StockReservationFailed,
                     new StockReservationFailedIntegrationEvent(
@@ -48,12 +57,7 @@ public sealed class OrderCreatedConsumer(InventoryDbContext dbContext) : IConsum
                 await dbContext.SaveChangesAsync(context.CancellationToken);
                 return;
             }
-        }
 
-        foreach (var line in normalizedLines)
-        {
-            var item = await dbContext.Items.FirstAsync(item => item.Sku == line.Sku, context.CancellationToken);
-            item.TryReserve(line.Quantity);
             dbContext.Reservations.Add(new StockReservation(reservationId, line.Sku, line.Quantity, message.OrderId));
             dbContext.StockMovements.Add(new StockMovement(
                 line.Sku,
@@ -77,5 +81,6 @@ public sealed class OrderCreatedConsumer(InventoryDbContext dbContext) : IConsum
                 normalizedLines.Select(line => new StockReservedLine(line.Sku, line.Quantity)).ToArray())));
         dbContext.MarkProcessed(message.EventId, ConsumerName);
         await dbContext.SaveChangesAsync(context.CancellationToken);
+        await transaction.CommitAsync(context.CancellationToken);
     }
 }

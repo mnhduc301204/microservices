@@ -16,7 +16,7 @@ public sealed class PaymentFailedConsumer(OrderingDbContext dbContext) : IConsum
     public async Task Consume(ConsumeContext<PaymentFailedIntegrationEvent> context)
     {
         var message = context.Message;
-        if (await dbContext.HasProcessedAsync(message.EventId, ConsumerName, context.CancellationToken))
+        if (!await dbContext.TryBeginProcessingAsync(message.EventId, ConsumerName, context.CancellationToken))
         {
             return;
         }

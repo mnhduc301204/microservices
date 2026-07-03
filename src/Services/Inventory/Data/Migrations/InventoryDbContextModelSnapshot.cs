@@ -135,7 +135,7 @@ namespace ECommerce.Inventory.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ReservationId")
+                    b.HasIndex("ReservationId", "Sku")
                         .IsUnique();
 
                     b.HasIndex("Status", "ExpiresAt");
@@ -185,10 +185,32 @@ namespace ECommerce.Inventory.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
-                    b.Property<DateTimeOffset>("ProcessedAt")
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTimeOffset?>("LockedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("LockedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTimeOffset?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
                     b.HasKey("EventId", "Consumer");
+
+                    b.HasIndex("Status", "LockedAt");
 
                     b.ToTable("InboxMessage");
                 });

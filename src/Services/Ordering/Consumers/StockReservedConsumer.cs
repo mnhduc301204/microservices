@@ -13,7 +13,7 @@ public sealed class StockReservedConsumer(OrderingDbContext dbContext) : IConsum
     public async Task Consume(ConsumeContext<StockReservedIntegrationEvent> context)
     {
         var message = context.Message;
-        if (await dbContext.HasProcessedAsync(message.EventId, ConsumerName, context.CancellationToken))
+        if (!await dbContext.TryBeginProcessingAsync(message.EventId, ConsumerName, context.CancellationToken))
         {
             return;
         }

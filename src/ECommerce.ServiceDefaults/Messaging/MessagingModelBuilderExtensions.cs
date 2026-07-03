@@ -21,6 +21,9 @@ public static class MessagingModelBuilderExtensions
         {
             builder.HasKey(message => new { message.EventId, message.Consumer });
             builder.Property(message => message.Consumer).HasMaxLength(200).IsRequired();
+            builder.Property(message => message.LockedBy).HasMaxLength(200);
+            builder.Property(message => message.Error).HasMaxLength(2000);
+            builder.HasIndex(message => new { message.Status, message.LockedAt });
         });
 
         modelBuilder.Entity<IdempotencyRecord>(builder =>

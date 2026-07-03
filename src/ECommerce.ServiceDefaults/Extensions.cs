@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using ECommerce.ServiceDefaults.Correlation;
+using ECommerce.ServiceDefaults.Security;
 
 namespace ECommerce.ServiceDefaults;
 
@@ -11,14 +13,24 @@ public static class Extensions
 {
     public static IHostApplicationBuilder AddServiceDefaults(this IHostApplicationBuilder builder)
     {
+        var requireInternalApiKey = builder.Configuration.GetValue("InternalApi:RequireInbound", true);
+        if (!builder.Environment.IsDevelopment()
+            && requireInternalApiKey
+            && string.IsNullOrWhiteSpace(builder.Configuration["InternalApi:ApiKey"]))
+        {
+            throw new InvalidOperationException("InternalApi:ApiKey must be configured when InternalApi:RequireInbound is enabled.");
+        }
+
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddHealthChecks();
         builder.Services.AddProblemDetails();
         builder.Services.AddScoped<CorrelationContext>();
+        builder.Services.AddTransient<InternalApiKeyHandler>();
         builder.Services.AddServiceDiscovery();
         builder.Services.ConfigureHttpClientDefaults(http =>
         {
             http.AddServiceDiscovery();
+            http.AddHttpMessageHandler<InternalApiKeyHandler>();
             http.AddStandardResilienceHandler();
         });
 
@@ -28,6 +40,7 @@ public static class Extensions
     public static WebApplication MapDefaultEndpoints(this WebApplication app)
     {
         app.UseMiddleware<CorrelationMiddleware>();
+        app.UseMiddleware<InternalApiKeyMiddleware>();
         app.MapHealthChecks("/health");
         app.MapHealthChecks("/alive", new HealthCheckOptions
         {

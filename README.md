@@ -27,7 +27,7 @@ This solution is a .NET Aspire e-commerce lab organized as deployable microservi
 - Commands that need in-process dispatch use MassTransit Mediator.
 - Cross-service workflow uses Kafka topics through MassTransit.
 - Database-backed event publishing uses the local outbox table.
-- Event consumers record processed messages through an inbox table for idempotency.
+- Event consumers claim inbox messages before processing and mark them processed after business changes are saved. Stale processing locks can be retried.
 
 ## Checkout Flow
 
@@ -40,7 +40,7 @@ This solution is a .NET Aspire e-commerce lab organized as deployable microservi
 7. Ordering confirms or cancels the order based on payment/reservation result.
 8. Notification consumes important integration events and stores notification records.
 
-The flow is eventually consistent. It does not use distributed transactions or shared databases.
+The flow is eventually consistent. It does not use distributed transactions or shared databases. Ordering also runs a checkout saga timeout worker that fails stuck checkouts and releases reserved stock when needed.
 
 ## Local Development
 
@@ -84,6 +84,16 @@ Route policies:
 
 Production must set `Authentication:SigningKey` from a secret store and should replace the development token endpoint with a real identity provider.
 
+Gateway also forwards `X-Internal-Api-Key` to backend services when `InternalApi:ApiKey` is configured. Backend services enforce that header when their own `InternalApi:ApiKey` is configured. `HttpClientFactory` clients created through service defaults also attach the same header for backend-to-backend calls. Keep `InternalApi:RequireInbound=false` on the gateway so external customers authenticate with JWT instead of the internal service key.
+
+Production required secrets:
+
+- `Authentication:SigningKey` on `ECommerce.Gateway`.
+- `InternalApi:ApiKey` on `ECommerce.Gateway` and every backend service.
+- `PaymentProvider:WebhookSecret` on `Payment`.
+
+The development values in `appsettings.Development.json` are local-only placeholders and must not be reused in production.
+
 ## Reliability Notes
 
 Payment APIs support `Idempotency-Key` on create and refund commands. Payment records store the idempotency key, provider transaction id, failure reason, completion timestamp, and refund timestamp.
@@ -94,13 +104,24 @@ Fake payment provider webhooks are available at:
 POST /api/payments/webhooks/fake-provider
 ```
 
-The webhook payload must include `EventId`, `PaymentId`, `ProviderTransactionId`, `Status`, and `Signature`. The signature is an HMAC-SHA256 over:
+The webhook payload must include `EventId`, `PaymentId`, `ProviderTransactionId`, `Status`, and `Signature`. New clients should also send `OccurredAt`; events outside the 5 minute replay window are rejected. The signature is an HMAC-SHA256 over:
 
 ```text
 {EventId}:{PaymentId}:{ProviderTransactionId}:{Status}
 ```
 
-Inventory records stock movements for reserve, release, deduct, and reservation expiry. Reservations default to a 15 minute expiry and a background service releases expired reservations.
+Inventory records stock movements for reserve, release, deduct, and reservation expiry. Reservations default to a 15 minute expiry and a background service releases expired reservations. Stock reservation uses conditional database updates so concurrent orders cannot reserve more than the available quantity.
+
+## Production Operations Gaps
+
+The application code includes the core reliability primitives, but production deployment still needs environment-specific infrastructure:
+
+- Container images and Kubernetes/Helm manifests with readiness/liveness probes, resource limits, HPA, and network policies.
+- A real identity provider for OIDC/OAuth2 and service-to-service identity such as mTLS or workload identity.
+- A secret manager such as Vault, cloud secret manager, or Kubernetes Secrets wired by deployment tooling.
+- OpenTelemetry export targets and dashboards for Prometheus/Grafana/Loki/Tempo or an equivalent stack.
+- Testcontainers integration tests for PostgreSQL, Redis, and Kafka, plus concurrency tests for inventory reservation and inbox duplicate delivery.
+- Reviewed SQL migration rollout using expand-contract for destructive schema changes.
 
 ## Migrations
 

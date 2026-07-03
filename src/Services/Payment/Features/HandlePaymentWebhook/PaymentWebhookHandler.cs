@@ -9,10 +9,18 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ECommerce.Payment.Features.HandlePaymentWebhook;
 
-public sealed class PaymentWebhookHandler(PaymentDbContext dbContext, IConfiguration configuration)
+public sealed class PaymentWebhookHandler(
+    PaymentDbContext dbContext,
+    IConfiguration configuration,
+    IHostEnvironment environment)
 {
     public async Task<IResult> Handle(PaymentWebhookCommand command, CancellationToken cancellationToken)
     {
+        if (command.OccurredAt is { } occurredAt && Math.Abs((DateTimeOffset.UtcNow - occurredAt).TotalMinutes) > 5)
+        {
+            return Results.Unauthorized();
+        }
+
         if (!IsValidSignature(command))
         {
             return Results.Unauthorized();
@@ -75,6 +83,11 @@ public sealed class PaymentWebhookHandler(PaymentDbContext dbContext, IConfigura
         var secret = configuration["PaymentProvider:WebhookSecret"];
         if (string.IsNullOrWhiteSpace(secret))
         {
+            if (!environment.IsDevelopment())
+            {
+                throw new InvalidOperationException("PaymentProvider:WebhookSecret must be configured.");
+            }
+
             secret = "development-only-payment-webhook-secret";
         }
 

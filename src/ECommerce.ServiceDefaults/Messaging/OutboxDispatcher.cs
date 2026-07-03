@@ -29,26 +29,44 @@ public sealed class OutboxDispatcher<TDbContext>(
         using var scope = serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
         var publisher = scope.ServiceProvider.GetRequiredService<KafkaOutboxPublisher>();
+        var now = DateTimeOffset.UtcNow;
+        var staleLockCutoff = now.AddMinutes(-5);
 
-        var messages = await dbContext.Set<OutboxMessage>()
+        var candidateIds = await dbContext.Set<OutboxMessage>()
             .Where(message =>
                 message.ProcessedAt == null
                 && !message.IsDeadLetter
-                && message.LockedAt == null
-                && (message.NextAttemptAt == null || message.NextAttemptAt <= DateTimeOffset.UtcNow))
+                && (message.LockedAt == null || message.LockedAt <= staleLockCutoff)
+                && (message.NextAttemptAt == null || message.NextAttemptAt <= now))
             .OrderBy(message => message.OccurredAt)
             .Take(20)
+            .Select(message => message.Id)
             .ToListAsync(cancellationToken);
 
-        foreach (var message in messages)
+        if (candidateIds.Count == 0)
         {
-            message.Lock(workerId);
+            return;
         }
 
-        if (messages.Count > 0)
-        {
-            await dbContext.SaveChangesAsync(cancellationToken);
-        }
+        await dbContext.Set<OutboxMessage>()
+            .Where(message =>
+                candidateIds.Contains(message.Id)
+                && message.ProcessedAt == null
+                && !message.IsDeadLetter
+                && (message.LockedAt == null || message.LockedAt <= staleLockCutoff)
+                && (message.NextAttemptAt == null || message.NextAttemptAt <= now))
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(message => message.LockedAt, now)
+                .SetProperty(message => message.LockedBy, workerId), cancellationToken);
+
+        var messages = await dbContext.Set<OutboxMessage>()
+            .Where(message =>
+                candidateIds.Contains(message.Id)
+                && message.LockedBy == workerId
+                && message.ProcessedAt == null
+                && !message.IsDeadLetter)
+            .OrderBy(message => message.OccurredAt)
+            .ToListAsync(cancellationToken);
 
         foreach (var message in messages)
         {

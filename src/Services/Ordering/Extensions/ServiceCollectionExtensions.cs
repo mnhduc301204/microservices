@@ -1,3 +1,4 @@
+using ECommerce.Ordering.BackgroundServices;
 using ECommerce.Ordering.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,6 +16,8 @@ public static class ServiceCollectionExtensions
         {
             builder.Services.AddDbContext<OrderingDbContext>(options => options.UseInMemoryDatabase("orderingdb"));
         }
+
+        builder.Services.AddHostedService<CheckoutSagaTimeoutService>();
 
         return builder;
     }

@@ -1,6 +1,8 @@
 using ECommerce.Gateway.Auth;
 using ECommerce.ServiceDefaults;
+using ECommerce.ServiceDefaults.Security;
 using System.Threading.RateLimiting;
+using Yarp.ReverseProxy.Transforms;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,7 +25,21 @@ builder.Services.AddRateLimiter(options =>
 builder.Services
     .AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
-    .AddServiceDiscoveryDestinationResolver();
+    .AddServiceDiscoveryDestinationResolver()
+    .AddTransforms(transformBuilderContext =>
+    {
+        transformBuilderContext.AddRequestTransform(transformContext =>
+        {
+            var internalApiKey = builder.Configuration["InternalApi:ApiKey"];
+            if (!string.IsNullOrWhiteSpace(internalApiKey))
+            {
+                transformContext.ProxyRequest.Headers.Remove(InternalApiKeyMiddleware.HeaderName);
+                transformContext.ProxyRequest.Headers.TryAddWithoutValidation(InternalApiKeyMiddleware.HeaderName, internalApiKey);
+            }
+
+            return ValueTask.CompletedTask;
+        });
+    });
 
 var app = builder.Build();
 

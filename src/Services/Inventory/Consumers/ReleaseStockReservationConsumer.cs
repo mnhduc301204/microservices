@@ -14,7 +14,7 @@ public sealed class ReleaseStockReservationConsumer(InventoryDbContext dbContext
     public async Task Consume(ConsumeContext<ReleaseStockReservationIntegrationEvent> context)
     {
         var message = context.Message;
-        if (await dbContext.HasProcessedAsync(message.EventId, ConsumerName, context.CancellationToken))
+        if (!await dbContext.TryBeginProcessingAsync(message.EventId, ConsumerName, context.CancellationToken))
         {
             return;
         }

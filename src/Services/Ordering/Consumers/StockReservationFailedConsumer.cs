@@ -15,7 +15,7 @@ public sealed class StockReservationFailedConsumer(OrderingDbContext dbContext) 
     public async Task Consume(ConsumeContext<StockReservationFailedIntegrationEvent> context)
     {
         var message = context.Message;
-        if (await dbContext.HasProcessedAsync(message.EventId, ConsumerName, context.CancellationToken))
+        if (!await dbContext.TryBeginProcessingAsync(message.EventId, ConsumerName, context.CancellationToken))
         {
             return;
         }

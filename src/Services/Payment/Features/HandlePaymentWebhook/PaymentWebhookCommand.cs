@@ -5,4 +5,5 @@ public sealed record PaymentWebhookCommand(
     Guid PaymentId,
     string ProviderTransactionId,
     string Status,
-    string Signature);
+    string Signature,
+    DateTimeOffset? OccurredAt = null);

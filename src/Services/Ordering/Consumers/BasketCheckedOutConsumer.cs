@@ -15,7 +15,7 @@ public sealed class BasketCheckedOutConsumer(OrderingDbContext dbContext) : ICon
     public async Task Consume(ConsumeContext<BasketCheckedOutIntegrationEvent> context)
     {
         var message = context.Message;
-        if (await dbContext.HasProcessedAsync(message.EventId, ConsumerName, context.CancellationToken))
+        if (!await dbContext.TryBeginProcessingAsync(message.EventId, ConsumerName, context.CancellationToken))
         {
             return;
         }

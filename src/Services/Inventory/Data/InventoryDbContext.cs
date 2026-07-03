@@ -27,7 +27,7 @@ public sealed class InventoryDbContext(DbContextOptions<InventoryDbContext> opti
         {
             builder.HasKey(reservation => reservation.Id);
             builder.Property(reservation => reservation.Sku).HasMaxLength(64).IsRequired();
-            builder.HasIndex(reservation => reservation.ReservationId).IsUnique();
+            builder.HasIndex(reservation => new { reservation.ReservationId, reservation.Sku }).IsUnique();
             builder.HasIndex(reservation => new { reservation.Status, reservation.ExpiresAt });
         });
 

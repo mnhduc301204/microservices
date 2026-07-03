@@ -14,7 +14,7 @@ public abstract class NotificationConsumerBase(NotificationDbContext dbContext)
         string message,
         CancellationToken cancellationToken)
     {
-        if (await dbContext.HasProcessedAsync(eventId, type, cancellationToken))
+        if (!await dbContext.TryBeginProcessingAsync(eventId, type, cancellationToken))
         {
             return;
         }
