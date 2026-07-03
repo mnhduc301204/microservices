@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "ECommerce.Gateway": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:9678;http://localhost:9679"
+    }
+  }
+}

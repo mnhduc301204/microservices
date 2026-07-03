@@ -1,5 +1,5 @@
 {
-  "name": "Nadir Badnjevic VSA .NET 10 Template - Healthcare domain",
+  "name": "ECommerce Microservices .NET Aspire",
   "dockerComposeFile": "docker-compose.yml",
   "service": "app",
   "workspaceFolder": "/workspace",
@@ -14,17 +14,16 @@
         "ms-azuretools.vscode-docker"
       ],
       "settings": {
-        "dotnet.defaultSolution": "VerticalSliceArchitecture.slnx",
+        "dotnet.defaultSolution": "ECommerce.slnx",
         "omnisharp.enableEditorConfigSupport": true,
         "editor.formatOnSave": true
       }
     }
   },
   "postCreateCommand": "bash .devcontainer/post-create.sh",
-  "forwardPorts": [5206, 5432],
+  "forwardPorts": [18888],
   "portsAttributes": {
-    "5206": { "label": "API (HTTP)", "onAutoForward": "openBrowser" },
-    "5432": { "label": "PostgreSQL", "onAutoForward": "silent" }
+    "18888": { "label": "Aspire Dashboard", "onAutoForward": "openBrowser" }
   },
   "remoteEnv": {
     "ASPNETCORE_ENVIRONMENT": "Development",

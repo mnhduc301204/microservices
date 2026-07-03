@@ -8,7 +8,7 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
-        <AssemblyName>VerticalSliceArchitecture.$(MSBuildProjectName)</AssemblyName>
+        <AssemblyName>ECommerce.$(MSBuildProjectName)</AssemblyName>
         <RootNamespace>$(AssemblyName)</RootNamespace>
 
         <AnalysisLevel>latest-minimum</AnalysisLevel>
@@ -22,10 +22,4 @@
       <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
     </PropertyGroup>
 
-    <ItemGroup>
-        <PackageReference Include="StyleCop.Analyzers" >
-            <PrivateAssets>all</PrivateAssets>
-            <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
-        </PackageReference>
-    </ItemGroup>
 </Project>

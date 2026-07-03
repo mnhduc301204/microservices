@@ -1,0 +1,29 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ECommerce.AppHost/ECommerce.AppHost.csproj" />
+    <Project Path="src/ECommerce.Contracts/ECommerce.Contracts.csproj" />
+    <Project Path="src/ECommerce.Gateway/ECommerce.Gateway.csproj" />
+    <Project Path="src/ECommerce.ServiceDefaults/ECommerce.ServiceDefaults.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/">
+    <Project Path="src/Services/Catalog/Catalog.csproj" />
+    <Project Path="src/Services/Inventory/Inventory.csproj" />
+    <Project Path="src/Services/Basket/Basket.csproj" />
+    <Project Path="src/Services/Ordering/Ordering.csproj" />
+    <Project Path="src/Services/Payment/Payment.csproj" />
+    <Project Path="src/Services/Notification/Notification.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Catalog.Tests/Catalog.Tests.csproj" />
+    <Project Path="tests/Inventory.Tests/Inventory.Tests.csproj" />
+    <Project Path="tests/Basket.Tests/Basket.Tests.csproj" />
+    <Project Path="tests/Ordering.Tests/Ordering.Tests.csproj" />
+    <Project Path="tests/Payment.Tests/Payment.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
+  </Folder>
+</Solution>

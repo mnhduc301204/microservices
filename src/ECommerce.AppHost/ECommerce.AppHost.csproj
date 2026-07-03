@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsAspireHost>true</IsAspireHost>
+    <AspireHostingSDKVersion>13.4.6</AspireHostingSDKVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" />
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" />
+    <PackageReference Include="Aspire.Hosting.Redis" />
+    <PackageReference Include="Aspire.Hosting.Kafka" />
+    <PackageReference Include="Aspire.Dashboard.Sdk.win-x64" />
+    <PackageReference Include="Aspire.Hosting.Orchestration.win-x64" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Services\Catalog\Catalog.csproj" IsAspireProjectResource="true" />
+    <ProjectReference Include="..\Services\Inventory\Inventory.csproj" IsAspireProjectResource="true" />
+    <ProjectReference Include="..\Services\Basket\Basket.csproj" IsAspireProjectResource="true" />
+    <ProjectReference Include="..\Services\Ordering\Ordering.csproj" IsAspireProjectResource="true" />
+    <ProjectReference Include="..\Services\Payment\Payment.csproj" IsAspireProjectResource="true" />
+    <ProjectReference Include="..\Services\Notification\Notification.csproj" IsAspireProjectResource="true" />
+    <ProjectReference Include="..\ECommerce.Gateway\ECommerce.Gateway.csproj" IsAspireProjectResource="true" />
+  </ItemGroup>
+</Project>

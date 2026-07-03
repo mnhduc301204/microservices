@@ -1,0 +1,42 @@
+using ECommerce.Contracts;
+using ECommerce.Contracts.Inventory;
+using ECommerce.Contracts.Ordering;
+using ECommerce.Inventory.Consumers;
+using ECommerce.Inventory.Data;
+using ECommerce.ServiceDefaults.Messaging;
+using MassTransit;
+
+namespace ECommerce.Inventory.Extensions;
+
+public static class MessagingExtensions
+{
+    public static IHostApplicationBuilder AddInventoryMessaging(this IHostApplicationBuilder builder)
+    {
+        builder.Services.AddScoped<KafkaOutboxPublisher>();
+        builder.Services.AddHostedService<OutboxDispatcher<InventoryDbContext>>();
+        builder.Services.AddMediator(cfg => cfg.AddConsumers(typeof(Program).Assembly));
+        builder.Services.AddMassTransit(bus =>
+        {
+            bus.AddConsumer<OrderCreatedConsumer>();
+            bus.AddConsumer<ReleaseStockReservationConsumer>();
+            bus.UsingInMemory((context, cfg) => cfg.ConfigureEndpoints(context));
+            bus.AddRider(rider =>
+            {
+                rider.AddProducer<StockReservedIntegrationEvent>(KafkaTopics.StockReserved);
+                rider.AddProducer<StockReservationFailedIntegrationEvent>(KafkaTopics.StockReservationFailed);
+                rider.AddConsumer<OrderCreatedConsumer>();
+                rider.AddConsumer<ReleaseStockReservationConsumer>();
+                rider.UsingKafka((context, kafka) =>
+                {
+                    kafka.Host(KafkaConnection.GetBootstrapServers(builder.Configuration));
+                    kafka.TopicEndpoint<OrderCreatedIntegrationEvent>(KafkaTopics.OrderCreated, "inventory-service", endpoint =>
+                        endpoint.ConfigureConsumer<OrderCreatedConsumer>(context));
+                    kafka.TopicEndpoint<ReleaseStockReservationIntegrationEvent>(KafkaTopics.ReleaseStockReservation, "inventory-service", endpoint =>
+                        endpoint.ConfigureConsumer<ReleaseStockReservationConsumer>(context));
+                });
+            });
+        });
+
+        return builder;
+    }
+}
