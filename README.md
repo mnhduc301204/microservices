@@ -58,7 +58,7 @@ Run the Aspire AppHost:
 dotnet run --project src/ECommerce.AppHost/ECommerce.AppHost.csproj
 ```
 
-Aspire provisions PostgreSQL databases, Redis, Kafka, and the service projects for local development. Runtime connection strings are supplied by Aspire configuration.
+Aspire provisions PostgreSQL databases, Redis, Kafka, and the service projects for local development. Runtime connection strings are supplied by Aspire configuration. The local Kafka broker is configured with 12 default partitions so consumer replicas can increase throughput when topics are auto-created.
 
 ## Gateway Authentication
 
@@ -98,6 +98,8 @@ The development values in `appsettings.Development.json` are local-only placehol
 
 Payment APIs support `Idempotency-Key` on create and refund commands. Payment records store the idempotency key, provider transaction id, failure reason, completion timestamp, and refund timestamp.
 
+When Inventory publishes `StockReservedIntegrationEvent`, Payment creates a pending fake-provider intent instead of immediately succeeding the payment in the consumer. `FakePaymentProviderWorker` asynchronously completes pending intents and publishes `PaymentSucceededIntegrationEvent` or `PaymentFailedIntegrationEvent` through the outbox. The worker claims pending intents with a database lock so multiple Payment replicas can run safely.
+
 Fake payment provider webhooks are available at:
 
 ```text
@@ -134,6 +136,34 @@ dotnet ef migrations add <MigrationName> --project src\Services\<Service>\<Servi
 ```
 
 Do not run `database update` unless you intentionally want to mutate a local database.
+
+## Container And Kubernetes Baseline
+
+Build service images with the parameterized Dockerfile:
+
+```powershell
+docker build -t ecommerce/gateway:latest --build-arg PROJECT_PATH=src/ECommerce.Gateway/ECommerce.Gateway.csproj --build-arg APP_DLL=ECommerce.ECommerce.Gateway.dll .
+docker build -t ecommerce/catalog:latest --build-arg PROJECT_PATH=src/Services/Catalog/Catalog.csproj --build-arg APP_DLL=ECommerce.Catalog.dll .
+docker build -t ecommerce/inventory:latest --build-arg PROJECT_PATH=src/Services/Inventory/Inventory.csproj --build-arg APP_DLL=ECommerce.Inventory.dll .
+docker build -t ecommerce/basket:latest --build-arg PROJECT_PATH=src/Services/Basket/Basket.csproj --build-arg APP_DLL=ECommerce.Basket.dll .
+docker build -t ecommerce/ordering:latest --build-arg PROJECT_PATH=src/Services/Ordering/Ordering.csproj --build-arg APP_DLL=ECommerce.Ordering.dll .
+docker build -t ecommerce/payment:latest --build-arg PROJECT_PATH=src/Services/Payment/Payment.csproj --build-arg APP_DLL=ECommerce.Payment.dll .
+docker build -t ecommerce/notification:latest --build-arg PROJECT_PATH=src/Services/Notification/Notification.csproj --build-arg APP_DLL=ECommerce.Notification.dll .
+```
+
+`deploy/kubernetes/ecommerce.yaml` contains a baseline namespace, secret template, config map, deployments, services, probes, resource limits for the gateway, and health probes for every service. Replace placeholder secrets with a real secret manager or sealed/external secrets before using it outside a lab.
+
+The manifest also includes default container limits, HPA examples, PDBs, and basic NetworkPolicy resources. Treat it as a starting point; production clusters should replace inline `Secret` values with External Secrets, add ingress/TLS, and run migrations through a reviewed job or deployment pipeline.
+
+## Load Testing
+
+Use k6 to exercise the checkout path through the gateway:
+
+```powershell
+k6 run -e GATEWAY_URL=https://localhost:<gateway-port> -e SKU=SKU-001 tests/load/checkout.k6.js
+```
+
+Before running, seed enough inventory for the selected SKU. Watch Kafka consumer lag, outbox pending count, PostgreSQL connections, and checkout latency while scaling service replicas.
 
 ## Adding A Service
 

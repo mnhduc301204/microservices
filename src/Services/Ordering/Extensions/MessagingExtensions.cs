@@ -45,15 +45,30 @@ public static class MessagingExtensions
                 {
                     kafka.Host(KafkaConnection.GetBootstrapServers(builder.Configuration));
                     kafka.TopicEndpoint<BasketCheckedOutIntegrationEvent>(KafkaTopics.BasketCheckedOut, "ordering-service", endpoint =>
-                        endpoint.ConfigureConsumer<BasketCheckedOutConsumer>(context));
+                    {
+                        endpoint.UseMessageRetry(retry => retry.Exponential(5, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(2)));
+                        endpoint.ConfigureConsumer<BasketCheckedOutConsumer>(context);
+                    });
                     kafka.TopicEndpoint<PaymentSucceededIntegrationEvent>(KafkaTopics.PaymentSucceeded, "ordering-service", endpoint =>
-                        endpoint.ConfigureConsumer<PaymentSucceededConsumer>(context));
+                    {
+                        endpoint.UseMessageRetry(retry => retry.Exponential(5, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(2)));
+                        endpoint.ConfigureConsumer<PaymentSucceededConsumer>(context);
+                    });
                     kafka.TopicEndpoint<PaymentFailedIntegrationEvent>(KafkaTopics.PaymentFailed, "ordering-service", endpoint =>
-                        endpoint.ConfigureConsumer<PaymentFailedConsumer>(context));
+                    {
+                        endpoint.UseMessageRetry(retry => retry.Exponential(5, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(2)));
+                        endpoint.ConfigureConsumer<PaymentFailedConsumer>(context);
+                    });
                     kafka.TopicEndpoint<StockReservedIntegrationEvent>(KafkaTopics.StockReserved, "ordering-service", endpoint =>
-                        endpoint.ConfigureConsumer<StockReservedConsumer>(context));
+                    {
+                        endpoint.UseMessageRetry(retry => retry.Exponential(5, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(2)));
+                        endpoint.ConfigureConsumer<StockReservedConsumer>(context);
+                    });
                     kafka.TopicEndpoint<StockReservationFailedIntegrationEvent>(KafkaTopics.StockReservationFailed, "ordering-service", endpoint =>
-                        endpoint.ConfigureConsumer<StockReservationFailedConsumer>(context));
+                    {
+                        endpoint.UseMessageRetry(retry => retry.Exponential(5, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(2)));
+                        endpoint.ConfigureConsumer<StockReservationFailedConsumer>(context);
+                    });
                 });
             });
         });

@@ -1,3 +1,4 @@
+using ECommerce.Payment.BackgroundServices;
 using ECommerce.Payment.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,6 +16,8 @@ public static class ServiceCollectionExtensions
         {
             builder.Services.AddDbContext<PaymentDbContext>(options => options.UseInMemoryDatabase("paymentdb"));
         }
+
+        builder.Services.AddHostedService<FakePaymentProviderWorker>();
 
         return builder;
     }

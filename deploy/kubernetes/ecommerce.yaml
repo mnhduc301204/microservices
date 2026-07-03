@@ -1,0 +1,566 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ecommerce
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ecommerce-secrets
+  namespace: ecommerce
+type: Opaque
+stringData:
+  Authentication__SigningKey: change-me-with-secret-manager
+  InternalApi__ApiKey: change-me-with-secret-manager
+  PaymentProvider__WebhookSecret: change-me-with-secret-manager
+  ConnectionStrings__catalogdb: Host=postgres;Database=catalogdb;Username=ecommerce;Password=change-me
+  ConnectionStrings__inventorydb: Host=postgres;Database=inventorydb;Username=ecommerce;Password=change-me
+  ConnectionStrings__orderingdb: Host=postgres;Database=orderingdb;Username=ecommerce;Password=change-me
+  ConnectionStrings__paymentdb: Host=postgres;Database=paymentdb;Username=ecommerce;Password=change-me
+  ConnectionStrings__notificationdb: Host=postgres;Database=notificationdb;Username=ecommerce;Password=change-me
+  ConnectionStrings__basket-redis: redis:6379
+  ConnectionStrings__kafka: kafka:9092
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ecommerce-config
+  namespace: ecommerce
+data:
+  ASPNETCORE_ENVIRONMENT: Production
+  Authentication__Issuer: ecommerce
+  Authentication__Audience: ecommerce-api
+  InternalApi__RequireInbound: "true"
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: ecommerce-default-limits
+  namespace: ecommerce
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 100m
+        memory: 128Mi
+      default:
+        cpu: 500m
+        memory: 512Mi
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-by-default
+  namespace: ecommerce
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-gateway-to-services
+  namespace: ecommerce
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - catalog-api
+          - inventory-api
+          - basket-api
+          - ordering-api
+          - payment-api
+          - notification-api
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-platform-egress
+  namespace: ecommerce
+spec:
+  podSelector: {}
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6379
+        - protocol: TCP
+          port: 9092
+        - protocol: TCP
+          port: 4317
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+  policyTypes:
+    - Egress
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: ecommerce
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+    spec:
+      containers:
+        - name: gateway
+          image: ecommerce/gateway:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: ecommerce-config
+            - secretRef:
+                name: ecommerce-secrets
+          env:
+            - name: InternalApi__RequireInbound
+              value: "false"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+          livenessProbe:
+            httpGet:
+              path: /alive
+              port: 8080
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  namespace: ecommerce
+spec:
+  selector:
+    app: gateway
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalog-api
+  namespace: ecommerce
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: catalog-api
+  template:
+    metadata:
+      labels:
+        app: catalog-api
+    spec:
+      containers:
+        - name: catalog-api
+          image: ecommerce/catalog:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: ecommerce-config
+            - secretRef:
+                name: ecommerce-secrets
+          readinessProbe: { httpGet: { path: /health, port: 8080 } }
+          livenessProbe: { httpGet: { path: /alive, port: 8080 } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalog-api
+  namespace: ecommerce
+spec:
+  selector: { app: catalog-api }
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-api
+  namespace: ecommerce
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: inventory-api
+  template:
+    metadata:
+      labels:
+        app: inventory-api
+    spec:
+      containers:
+        - name: inventory-api
+          image: ecommerce/inventory:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: ecommerce-config
+            - secretRef:
+                name: ecommerce-secrets
+          readinessProbe: { httpGet: { path: /health, port: 8080 } }
+          livenessProbe: { httpGet: { path: /alive, port: 8080 } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventory-api
+  namespace: ecommerce
+spec:
+  selector: { app: inventory-api }
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: basket-api
+  namespace: ecommerce
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: basket-api
+  template:
+    metadata:
+      labels:
+        app: basket-api
+    spec:
+      containers:
+        - name: basket-api
+          image: ecommerce/basket:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: ecommerce-config
+            - secretRef:
+                name: ecommerce-secrets
+          readinessProbe: { httpGet: { path: /health, port: 8080 } }
+          livenessProbe: { httpGet: { path: /alive, port: 8080 } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: basket-api
+  namespace: ecommerce
+spec:
+  selector: { app: basket-api }
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ordering-api
+  namespace: ecommerce
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ordering-api
+  template:
+    metadata:
+      labels:
+        app: ordering-api
+    spec:
+      containers:
+        - name: ordering-api
+          image: ecommerce/ordering:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: ecommerce-config
+            - secretRef:
+                name: ecommerce-secrets
+          readinessProbe: { httpGet: { path: /health, port: 8080 } }
+          livenessProbe: { httpGet: { path: /alive, port: 8080 } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ordering-api
+  namespace: ecommerce
+spec:
+  selector: { app: ordering-api }
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-api
+  namespace: ecommerce
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: payment-api
+  template:
+    metadata:
+      labels:
+        app: payment-api
+    spec:
+      containers:
+        - name: payment-api
+          image: ecommerce/payment:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: ecommerce-config
+            - secretRef:
+                name: ecommerce-secrets
+          readinessProbe: { httpGet: { path: /health, port: 8080 } }
+          livenessProbe: { httpGet: { path: /alive, port: 8080 } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-api
+  namespace: ecommerce
+spec:
+  selector: { app: payment-api }
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-api
+  namespace: ecommerce
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: notification-api
+  template:
+    metadata:
+      labels:
+        app: notification-api
+    spec:
+      containers:
+        - name: notification-api
+          image: ecommerce/notification:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: ecommerce-config
+            - secretRef:
+                name: ecommerce-secrets
+          readinessProbe: { httpGet: { path: /health, port: 8080 } }
+          livenessProbe: { httpGet: { path: /alive, port: 8080 } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-api
+  namespace: ecommerce
+spec:
+  selector: { app: notification-api }
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gateway-pdb
+  namespace: ecommerce
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: { app: gateway }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: gateway-hpa
+  namespace: ecommerce
+spec:
+  minReplicas: 2
+  maxReplicas: 10
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: gateway
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: catalog-api-hpa
+  namespace: ecommerce
+spec:
+  minReplicas: 2
+  maxReplicas: 10
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: catalog-api }
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: inventory-api-hpa
+  namespace: ecommerce
+spec:
+  minReplicas: 2
+  maxReplicas: 10
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: inventory-api }
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ordering-api-hpa
+  namespace: ecommerce
+spec:
+  minReplicas: 2
+  maxReplicas: 10
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: ordering-api }
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: payment-api-hpa
+  namespace: ecommerce
+spec:
+  minReplicas: 2
+  maxReplicas: 10
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: payment-api }
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: basket-api-hpa
+  namespace: ecommerce
+spec:
+  minReplicas: 2
+  maxReplicas: 10
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: basket-api }
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: notification-api-hpa
+  namespace: ecommerce
+spec:
+  minReplicas: 2
+  maxReplicas: 10
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: notification-api }
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: catalog-api-pdb
+  namespace: ecommerce
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: catalog-api } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: inventory-api-pdb
+  namespace: ecommerce
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: inventory-api } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: basket-api-pdb
+  namespace: ecommerce
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: basket-api } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ordering-api-pdb
+  namespace: ecommerce
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: ordering-api } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: payment-api-pdb
+  namespace: ecommerce
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: payment-api } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: notification-api-pdb
+  namespace: ecommerce
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: notification-api } }

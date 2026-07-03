@@ -18,7 +18,9 @@ var paymentDb = postgres.AddDatabase("paymentdb");
 var notificationDb = postgres.AddDatabase("notificationdb");
 
 var basketRedis = builder.AddRedis("basket-redis");
-var kafka = builder.AddKafka("kafka");
+var kafka = builder.AddKafka("kafka")
+    .WithEnvironment("KAFKA_CFG_NUM_PARTITIONS", "12")
+    .WithEnvironment("KAFKA_CFG_DEFAULT_REPLICATION_FACTOR", "1");
 
 var catalog = builder.AddProject<Projects.Catalog>("catalog-api")
     .WithReference(catalogDb)

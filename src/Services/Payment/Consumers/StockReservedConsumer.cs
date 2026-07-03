@@ -1,6 +1,5 @@
 using ECommerce.Contracts;
 using ECommerce.Contracts.Inventory;
-using ECommerce.Contracts.Payment;
 using ECommerce.Payment.Data;
 using ECommerce.ServiceDefaults.Messaging;
 using MassTransit;
@@ -27,31 +26,9 @@ public sealed class StockReservedConsumer(PaymentDbContext dbContext) : IConsume
             dbContext.Payments.Add(payment);
         }
 
-        try
+        if (payment.Status == Models.PaymentStatus.Pending && string.IsNullOrWhiteSpace(payment.ProviderIntentId))
         {
-            payment.MarkSucceeded();
-            dbContext.Set<OutboxMessage>().Add(OutboxMessage.Create(
-                KafkaTopics.PaymentSucceeded,
-                new PaymentSucceededIntegrationEvent(
-                    Guid.NewGuid(),
-                    DateTimeOffset.UtcNow,
-                    payment.Id,
-                    payment.OrderId,
-                    message.CustomerId,
-                    message.CustomerEmail,
-                    payment.Amount)));
-        }
-        catch (InvalidOperationException ex)
-        {
-            dbContext.Set<OutboxMessage>().Add(OutboxMessage.Create(
-                KafkaTopics.PaymentFailed,
-                new PaymentFailedIntegrationEvent(
-                    Guid.NewGuid(),
-                    DateTimeOffset.UtcNow,
-                    payment.Id,
-                    payment.OrderId,
-                    message.CustomerId,
-                    ex.Message)));
+            payment.RequestProviderIntent($"fake-intent-{payment.Id:N}");
         }
 
         dbContext.MarkProcessed(message.EventId, ConsumerName);

@@ -30,9 +30,15 @@ public static class MessagingExtensions
                 {
                     kafka.Host(KafkaConnection.GetBootstrapServers(builder.Configuration));
                     kafka.TopicEndpoint<OrderCreatedIntegrationEvent>(KafkaTopics.OrderCreated, "inventory-service", endpoint =>
-                        endpoint.ConfigureConsumer<OrderCreatedConsumer>(context));
+                    {
+                        endpoint.UseMessageRetry(retry => retry.Exponential(5, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(2)));
+                        endpoint.ConfigureConsumer<OrderCreatedConsumer>(context);
+                    });
                     kafka.TopicEndpoint<ReleaseStockReservationIntegrationEvent>(KafkaTopics.ReleaseStockReservation, "inventory-service", endpoint =>
-                        endpoint.ConfigureConsumer<ReleaseStockReservationConsumer>(context));
+                    {
+                        endpoint.UseMessageRetry(retry => retry.Exponential(5, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(2)));
+                        endpoint.ConfigureConsumer<ReleaseStockReservationConsumer>(context);
+                    });
                 });
             });
         });

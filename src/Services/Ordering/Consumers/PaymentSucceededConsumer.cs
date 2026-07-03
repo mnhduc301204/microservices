@@ -26,9 +26,15 @@ public sealed class PaymentSucceededConsumer(OrderingDbContext dbContext) : ICon
             return;
         }
 
-        order.ConfirmPayment();
-        var saga = await dbContext.CheckoutSagas.FirstOrDefaultAsync(saga => saga.OrderId == message.OrderId, context.CancellationToken);
-        saga?.MarkPaymentSucceeded(message.PaymentId);
+        var confirmed = await dbContext.TryConfirmOrderAsync(message.OrderId, context.CancellationToken);
+        if (confirmed == 0)
+        {
+            dbContext.MarkProcessed(message.EventId, ConsumerName);
+            await dbContext.SaveChangesAsync(context.CancellationToken);
+            return;
+        }
+
+        await dbContext.TryCompleteSagaAsync(message.OrderId, message.PaymentId, context.CancellationToken);
 
         dbContext.Set<OutboxMessage>().Add(OutboxMessage.Create(
             KafkaTopics.OrderConfirmed,

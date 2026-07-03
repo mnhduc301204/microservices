@@ -27,9 +27,16 @@ public sealed class PaymentFailedConsumer(OrderingDbContext dbContext) : IConsum
             return;
         }
 
-        order.Fail();
-        var saga = await dbContext.CheckoutSagas.FirstOrDefaultAsync(saga => saga.OrderId == message.OrderId, context.CancellationToken);
-        saga?.MarkFailed(message.Reason);
+        var failed = await dbContext.TryFailOrderAsync(message.OrderId, context.CancellationToken);
+        if (failed == 0)
+        {
+            dbContext.MarkProcessed(message.EventId, ConsumerName);
+            await dbContext.SaveChangesAsync(context.CancellationToken);
+            return;
+        }
+
+        await dbContext.TryFailSagaAsync(message.OrderId, message.Reason, context.CancellationToken);
+        var saga = await dbContext.CheckoutSagas.AsNoTracking().FirstOrDefaultAsync(saga => saga.OrderId == message.OrderId, context.CancellationToken);
 
         dbContext.Set<OutboxMessage>().Add(OutboxMessage.Create(
             KafkaTopics.OrderCancelled,

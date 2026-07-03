@@ -36,7 +36,14 @@ public static class InboxExtensions
             catch (DbUpdateException)
             {
                 dbContext.ChangeTracker.Clear();
-                return false;
+                if (await dbContext.Set<InboxMessage>().AnyAsync(
+                    message => message.EventId == eventId && message.Consumer == consumer,
+                    cancellationToken))
+                {
+                    return false;
+                }
+
+                throw;
             }
         }
 
@@ -51,9 +58,20 @@ public static class InboxExtensions
             return false;
         }
 
-        existing.Claim(WorkerId);
-        await dbContext.SaveChangesAsync(cancellationToken);
-        return true;
+        dbContext.ChangeTracker.Clear();
+        var claimed = await dbContext.Set<InboxMessage>()
+            .Where(message =>
+                message.EventId == eventId
+                && message.Consumer == consumer
+                && message.Status != InboxMessageStatus.Processed
+                && (message.Status != InboxMessageStatus.Processing || message.LockedAt <= staleLockCutoff))
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(message => message.Status, InboxMessageStatus.Processing)
+                .SetProperty(message => message.LockedAt, DateTimeOffset.UtcNow)
+                .SetProperty(message => message.LockedBy, WorkerId)
+                .SetProperty(message => message.Error, (string?)null), cancellationToken);
+
+        return claimed > 0;
     }
 
     public static void MarkProcessed(this DbContext dbContext, Guid eventId, string consumer)

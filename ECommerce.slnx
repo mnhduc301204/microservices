@@ -19,6 +19,7 @@
     <Project Path="tests/Basket.Tests/Basket.Tests.csproj" />
     <Project Path="tests/Ordering.Tests/Ordering.Tests.csproj" />
     <Project Path="tests/Payment.Tests/Payment.Tests.csproj" />
+    <Project Path="tests/Infrastructure.Tests/Infrastructure.Tests.csproj" />
   </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />

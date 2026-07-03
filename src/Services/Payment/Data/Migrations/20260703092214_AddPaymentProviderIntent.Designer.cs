@@ -3,6 +3,7 @@ using System;
 using ECommerce.Payment.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ECommerce.Payment.Data.Migrations
 {
     [DbContext(typeof(PaymentDbContext))]
-    partial class PaymentDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260703092214_AddPaymentProviderIntent")]
+    partial class AddPaymentProviderIntent
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -55,13 +58,6 @@ namespace ECommerce.Payment.Data.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("ProviderIntentId")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<DateTimeOffset?>("ProviderLockedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ProviderLockedBy")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 

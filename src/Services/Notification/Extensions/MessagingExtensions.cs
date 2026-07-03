@@ -27,17 +27,35 @@ public static class MessagingExtensions
                 {
                     kafka.Host(KafkaConnection.GetBootstrapServers(builder.Configuration));
                     kafka.TopicEndpoint<OrderCreatedIntegrationEvent>(KafkaTopics.OrderCreated, "notification-service", endpoint =>
-                        endpoint.ConfigureConsumer<OrderCreatedNotificationConsumer>(context));
+                    {
+                        endpoint.UseMessageRetry(retry => retry.Exponential(5, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(2)));
+                        endpoint.ConfigureConsumer<OrderCreatedNotificationConsumer>(context);
+                    });
                     kafka.TopicEndpoint<OrderConfirmedIntegrationEvent>(KafkaTopics.OrderConfirmed, "notification-service", endpoint =>
-                        endpoint.ConfigureConsumer<OrderConfirmedNotificationConsumer>(context));
+                    {
+                        endpoint.UseMessageRetry(retry => retry.Exponential(5, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(2)));
+                        endpoint.ConfigureConsumer<OrderConfirmedNotificationConsumer>(context);
+                    });
                     kafka.TopicEndpoint<OrderCancelledIntegrationEvent>(KafkaTopics.OrderCancelled, "notification-service", endpoint =>
-                        endpoint.ConfigureConsumer<OrderCancelledNotificationConsumer>(context));
+                    {
+                        endpoint.UseMessageRetry(retry => retry.Exponential(5, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(2)));
+                        endpoint.ConfigureConsumer<OrderCancelledNotificationConsumer>(context);
+                    });
                     kafka.TopicEndpoint<StockReservationFailedIntegrationEvent>(KafkaTopics.StockReservationFailed, "notification-service", endpoint =>
-                        endpoint.ConfigureConsumer<StockReservationFailedNotificationConsumer>(context));
+                    {
+                        endpoint.UseMessageRetry(retry => retry.Exponential(5, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(2)));
+                        endpoint.ConfigureConsumer<StockReservationFailedNotificationConsumer>(context);
+                    });
                     kafka.TopicEndpoint<PaymentSucceededIntegrationEvent>(KafkaTopics.PaymentSucceeded, "notification-service", endpoint =>
-                        endpoint.ConfigureConsumer<PaymentSucceededNotificationConsumer>(context));
+                    {
+                        endpoint.UseMessageRetry(retry => retry.Exponential(5, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(2)));
+                        endpoint.ConfigureConsumer<PaymentSucceededNotificationConsumer>(context);
+                    });
                     kafka.TopicEndpoint<PaymentFailedIntegrationEvent>(KafkaTopics.PaymentFailed, "notification-service", endpoint =>
-                        endpoint.ConfigureConsumer<PaymentFailedNotificationConsumer>(context));
+                    {
+                        endpoint.UseMessageRetry(retry => retry.Exponential(5, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(2)));
+                        endpoint.ConfigureConsumer<PaymentFailedNotificationConsumer>(context);
+                    });
                 });
             });
         });

@@ -28,7 +28,10 @@ public static class MessagingExtensions
                 {
                     kafka.Host(KafkaConnection.GetBootstrapServers(builder.Configuration));
                     kafka.TopicEndpoint<StockReservedIntegrationEvent>(KafkaTopics.StockReserved, "payment-service", endpoint =>
-                        endpoint.ConfigureConsumer<StockReservedConsumer>(context));
+                    {
+                        endpoint.UseMessageRetry(retry => retry.Exponential(5, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(2)));
+                        endpoint.ConfigureConsumer<StockReservedConsumer>(context);
+                    });
                 });
             });
         });

@@ -28,6 +28,8 @@ public sealed class Payment
 
     public string? ProviderTransactionId { get; private set; }
 
+    public string? ProviderIntentId { get; private set; }
+
     public string? FailureReason { get; private set; }
 
     public PaymentStatus Status { get; private set; }
@@ -37,6 +39,25 @@ public sealed class Payment
     public DateTimeOffset? CompletedAt { get; private set; }
 
     public DateTimeOffset? RefundedAt { get; private set; }
+
+    public DateTimeOffset? ProviderRequestedAt { get; private set; }
+
+    public DateTimeOffset? ProviderLockedAt { get; private set; }
+
+    public string? ProviderLockedBy { get; private set; }
+
+    public void RequestProviderIntent(string providerIntentId)
+    {
+        if (Status != PaymentStatus.Pending)
+        {
+            return;
+        }
+
+        ProviderIntentId = string.IsNullOrWhiteSpace(providerIntentId)
+            ? throw new ArgumentException("Provider intent id is required.", nameof(providerIntentId))
+            : providerIntentId.Trim();
+        ProviderRequestedAt = DateTimeOffset.UtcNow;
+    }
 
     public void MarkSucceeded(string? providerTransactionId = null)
     {

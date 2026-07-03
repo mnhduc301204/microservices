@@ -74,8 +74,14 @@ public sealed class CheckoutSagaTimeoutService(
             }
 
             var reason = "Checkout timed out.";
-            order.Fail();
-            saga.MarkFailed(reason);
+            var failed = await dbContext.TryFailOrderAsync(order.Id, cancellationToken);
+            if (failed == 0)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                continue;
+            }
+
+            await dbContext.TryFailSagaAsync(order.Id, reason, cancellationToken);
             dbContext.Set<OutboxMessage>().Add(OutboxMessage.Create(
                 KafkaTopics.OrderCancelled,
                 new OrderCancelledIntegrationEvent(Guid.NewGuid(), DateTimeOffset.UtcNow, order.Id, order.CustomerId, reason)));

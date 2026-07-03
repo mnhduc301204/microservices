@@ -20,10 +20,13 @@ public sealed class PaymentDbContext(DbContextOptions<PaymentDbContext> options)
             builder.Property(payment => payment.Amount).HasPrecision(18, 2);
             builder.Property(payment => payment.Currency).HasMaxLength(3).IsRequired();
             builder.Property(payment => payment.IdempotencyKey).HasMaxLength(200);
+            builder.Property(payment => payment.ProviderIntentId).HasMaxLength(200);
+            builder.Property(payment => payment.ProviderLockedBy).HasMaxLength(200);
             builder.Property(payment => payment.ProviderTransactionId).HasMaxLength(200);
             builder.Property(payment => payment.FailureReason).HasMaxLength(500);
             builder.HasIndex(payment => payment.OrderId).IsUnique();
             builder.HasIndex(payment => payment.IdempotencyKey).IsUnique();
+            builder.HasIndex(payment => payment.ProviderIntentId).IsUnique();
             builder.HasIndex(payment => payment.ProviderTransactionId).IsUnique();
         });
 

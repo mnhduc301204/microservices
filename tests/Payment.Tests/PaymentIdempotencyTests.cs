@@ -1,8 +1,11 @@
 using ECommerce.Payment.Data;
 using ECommerce.Payment.Features.CreatePayment;
+using ECommerce.Payment.Features.HandlePaymentWebhook;
 using ECommerce.Payment.Models;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 
 namespace ECommerce.Payment.Tests;
 
@@ -34,6 +37,30 @@ public sealed class PaymentIdempotencyTests
         payment.ProviderTransactionId.Should().Be("provider-tx-1");
     }
 
+    [Fact]
+    public async Task Webhook_WithStaleTimestamp_IsRejected()
+    {
+        await using var dbContext = CreateDbContext();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["PaymentProvider:WebhookSecret"] = "test-secret",
+            })
+            .Build();
+        var handler = new PaymentWebhookHandler(dbContext, configuration, new TestHostEnvironment());
+        var command = new PaymentWebhookCommand(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "provider-tx-1",
+            "SUCCEEDED",
+            "invalid-signature",
+            DateTimeOffset.UtcNow.AddMinutes(-10));
+
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        result.GetType().Name.Should().Contain("Unauthorized");
+    }
+
     private static PaymentDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<PaymentDbContext>()
@@ -41,5 +68,17 @@ public sealed class PaymentIdempotencyTests
             .Options;
 
         return new PaymentDbContext(options);
+    }
+
+    private sealed class TestHostEnvironment : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = Environments.Production;
+
+        public string ApplicationName { get; set; } = "Payment.Tests";
+
+        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
+
+        public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; } =
+            new Microsoft.Extensions.FileProviders.NullFileProvider();
     }
 }

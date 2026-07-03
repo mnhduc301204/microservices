@@ -18,8 +18,7 @@ public sealed class StockReservedConsumer(OrderingDbContext dbContext) : IConsum
             return;
         }
 
-        var saga = await dbContext.CheckoutSagas.FirstOrDefaultAsync(saga => saga.OrderId == message.OrderId, context.CancellationToken);
-        saga?.MarkStockReserved(message.ReservationId);
+        await dbContext.TryMarkSagaStockReservedAsync(message.OrderId, message.ReservationId, context.CancellationToken);
 
         dbContext.MarkProcessed(message.EventId, ConsumerName);
         await dbContext.SaveChangesAsync(context.CancellationToken);
