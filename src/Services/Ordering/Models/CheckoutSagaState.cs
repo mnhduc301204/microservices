@@ -54,7 +54,7 @@ public sealed class CheckoutSagaState
 
     public void MarkPaymentSucceeded(Guid paymentId)
     {
-        if (Status == CheckoutSagaStatus.Completed)
+        if (Status is CheckoutSagaStatus.Completed or CheckoutSagaStatus.Failed)
         {
             return;
         }

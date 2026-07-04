@@ -11,6 +11,7 @@ public static class MessagingModelBuilderExtensions
             builder.HasKey(message => message.Id);
             builder.Property(message => message.Topic).HasMaxLength(200).IsRequired();
             builder.Property(message => message.MessageType).HasMaxLength(500).IsRequired();
+            builder.Property(message => message.PartitionKey).HasMaxLength(200);
             builder.Property(message => message.Payload).IsRequired();
             builder.Property(message => message.Error).HasMaxLength(2000);
             builder.Property(message => message.LockedBy).HasMaxLength(200);

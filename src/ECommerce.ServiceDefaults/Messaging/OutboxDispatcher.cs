@@ -99,11 +99,25 @@ public sealed class KafkaOutboxPublisher(IServiceProvider serviceProvider)
         var payload = JsonSerializer.Deserialize(message.Payload, messageType, MessagingJson.Options)
             ?? throw new InvalidOperationException($"Message payload '{message.Id}' could not be deserialized.");
 
+        if (!string.IsNullOrWhiteSpace(message.PartitionKey))
+        {
+            var keyedProducerType = typeof(ITopicProducer<,>).MakeGenericType(typeof(string), messageType);
+            var keyedProducer = serviceProvider.GetService(keyedProducerType);
+            if (keyedProducer is not null)
+            {
+                var keyedProduceMethod = keyedProducerType.GetMethod(nameof(ITopicProducer<string, object>.Produce), [typeof(string), messageType, typeof(CancellationToken)])
+                    ?? throw new InvalidOperationException($"Keyed Produce method for '{messageType.Name}' could not be found.");
+
+                var keyedTask = (Task)keyedProduceMethod.Invoke(keyedProducer, [message.PartitionKey, payload, cancellationToken])!;
+                await keyedTask;
+                return;
+            }
+        }
+
         var producerType = typeof(ITopicProducer<>).MakeGenericType(messageType);
         var producer = serviceProvider.GetRequiredService(producerType);
         var produceMethod = producerType.GetMethod(nameof(ITopicProducer<object>.Produce), [messageType, typeof(CancellationToken)])
             ?? throw new InvalidOperationException($"Produce method for '{messageType.Name}' could not be found.");
-
         var task = (Task)produceMethod.Invoke(producer, [payload, cancellationToken])!;
         await task;
     }

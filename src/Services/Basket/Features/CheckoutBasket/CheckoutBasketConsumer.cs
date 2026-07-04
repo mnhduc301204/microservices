@@ -7,7 +7,7 @@ namespace ECommerce.Basket.Features.CheckoutBasket;
 
 public sealed class CheckoutBasketConsumer(
     IBasketStore basketStore,
-    ITopicProducer<BasketCheckedOutIntegrationEvent> producer)
+    ITopicProducer<string, BasketCheckedOutIntegrationEvent> producer)
     : IConsumer<CheckoutBasketCommand>
 {
     public async Task Consume(ConsumeContext<CheckoutBasketCommand> context)

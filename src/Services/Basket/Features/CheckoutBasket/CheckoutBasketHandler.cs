@@ -6,7 +6,7 @@ using MassTransit;
 
 namespace ECommerce.Basket.Features.CheckoutBasket;
 
-public sealed class CheckoutBasketHandler(IBasketStore basketStore, ITopicProducer<BasketCheckedOutIntegrationEvent> producer)
+public sealed class CheckoutBasketHandler(IBasketStore basketStore, ITopicProducer<string, BasketCheckedOutIntegrationEvent> producer)
 {
     public async Task<IResult> Handle(CheckoutBasketCommand command, CancellationToken cancellationToken)
     {
@@ -30,6 +30,7 @@ public sealed class CheckoutBasketHandler(IBasketStore basketStore, ITopicProduc
 
         var checkoutId = Guid.NewGuid();
         await producer.Produce(
+            command.CustomerId.ToString(),
             new BasketCheckedOutIntegrationEvent(
                 checkoutId,
                 DateTimeOffset.UtcNow,

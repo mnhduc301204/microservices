@@ -25,6 +25,11 @@ public sealed class ConfirmPaymentHandler(PaymentDbContext dbContext)
 
         if (command.ShouldSucceed)
         {
+            if (payment.Status == Models.PaymentStatus.Succeeded)
+            {
+                return Results.Ok(new ConfirmPaymentResponse(payment.Id, payment.OrderId, payment.Status));
+            }
+
             payment.MarkSucceeded($"fake-{payment.Id:N}");
             dbContext.Set<OutboxMessage>().Add(OutboxMessage.Create(
                 KafkaTopics.PaymentSucceeded,
@@ -39,6 +44,11 @@ public sealed class ConfirmPaymentHandler(PaymentDbContext dbContext)
         }
         else
         {
+            if (payment.Status == Models.PaymentStatus.Failed || payment.Status == Models.PaymentStatus.Succeeded)
+            {
+                return Results.Ok(new ConfirmPaymentResponse(payment.Id, payment.OrderId, payment.Status));
+            }
+
             payment.MarkFailed("Payment was declined by fake provider.");
             dbContext.Set<OutboxMessage>().Add(OutboxMessage.Create(
                 KafkaTopics.PaymentFailed,

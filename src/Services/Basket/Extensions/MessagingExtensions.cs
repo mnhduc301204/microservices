@@ -23,6 +23,7 @@ public static class MessagingExtensions
             bus.AddRider(rider =>
             {
                 rider.AddProducer<BasketCheckedOutIntegrationEvent>(KafkaTopics.BasketCheckedOut);
+                rider.AddProducer<string, BasketCheckedOutIntegrationEvent>(KafkaTopics.BasketCheckedOut);
                 rider.UsingKafka((_, kafka) => kafka.Host(KafkaConnection.GetBootstrapServers(builder.Configuration)));
             });
         });

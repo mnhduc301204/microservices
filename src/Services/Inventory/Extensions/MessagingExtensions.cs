@@ -24,6 +24,8 @@ public static class MessagingExtensions
             {
                 rider.AddProducer<StockReservedIntegrationEvent>(KafkaTopics.StockReserved);
                 rider.AddProducer<StockReservationFailedIntegrationEvent>(KafkaTopics.StockReservationFailed);
+                rider.AddProducer<string, StockReservedIntegrationEvent>(KafkaTopics.StockReserved);
+                rider.AddProducer<string, StockReservationFailedIntegrationEvent>(KafkaTopics.StockReservationFailed);
                 rider.AddConsumer<OrderCreatedConsumer>();
                 rider.AddConsumer<ReleaseStockReservationConsumer>();
                 rider.UsingKafka((context, kafka) =>

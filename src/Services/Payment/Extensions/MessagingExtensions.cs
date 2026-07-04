@@ -23,6 +23,8 @@ public static class MessagingExtensions
             {
                 rider.AddProducer<PaymentSucceededIntegrationEvent>(KafkaTopics.PaymentSucceeded);
                 rider.AddProducer<PaymentFailedIntegrationEvent>(KafkaTopics.PaymentFailed);
+                rider.AddProducer<string, PaymentSucceededIntegrationEvent>(KafkaTopics.PaymentSucceeded);
+                rider.AddProducer<string, PaymentFailedIntegrationEvent>(KafkaTopics.PaymentFailed);
                 rider.AddConsumer<StockReservedConsumer>();
                 rider.UsingKafka((context, kafka) =>
                 {

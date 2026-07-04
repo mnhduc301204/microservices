@@ -24,6 +24,7 @@ public static class MessagingExtensions
             bus.AddRider(rider =>
             {
                 rider.AddProducer<ProductCreatedIntegrationEvent>(KafkaTopics.ProductCreated);
+                rider.AddProducer<string, ProductCreatedIntegrationEvent>(KafkaTopics.ProductCreated);
                 rider.UsingKafka((_, kafka) => kafka.Host(KafkaConnection.GetBootstrapServers(builder.Configuration)));
             });
         });

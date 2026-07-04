@@ -18,6 +18,7 @@ export const options = {
     http_req_duration: ["p(95)<1000"],
     checkout_latency: ["p(95)<1500"],
     checkout_failed: ["rate<0.05"],
+    expected_partial_failure: ["rate<0.20"],
   },
 };
 
@@ -27,6 +28,9 @@ const productName = __ENV.PRODUCT_NAME || "Load Test Product";
 const unitPrice = Number(__ENV.UNIT_PRICE || "10");
 const checkoutLatency = new Trend("checkout_latency");
 const checkoutFailed = new Rate("checkout_failed");
+const expectedPartialFailure = new Rate("expected_partial_failure");
+const duplicateCheckoutRate = Number(__ENV.DUPLICATE_CHECKOUT_RATE || "0");
+const insufficientStockRate = Number(__ENV.INSUFFICIENT_STOCK_RATE || "0");
 
 function uuid() {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
@@ -61,7 +65,7 @@ export default function () {
       sku,
       productName,
       unitPrice,
-      quantity: 1,
+      quantity: Math.random() < insufficientStockRate ? 999999 : 1,
     }),
     { headers },
   );
@@ -83,5 +87,21 @@ export default function () {
   checkoutFailed.add(!ok);
   check(checkout, { "checkout accepted": () => ok });
 
+  if (Math.random() < duplicateCheckoutRate) {
+    const duplicate = http.post(
+      `${baseUrl}/api/basket/${customerId}/checkout`,
+      JSON.stringify({
+        customerId,
+        customerEmail: `${customerId}@load.test`,
+      }),
+      { headers },
+    );
+
+    const duplicateHandled = duplicate.status === 409 || duplicate.status === 404 || duplicate.status === 400;
+    expectedPartialFailure.add(duplicateHandled);
+    check(duplicate, { "duplicate checkout handled": () => duplicateHandled });
+  }
+
+  expectedPartialFailure.add(!ok && checkout.status >= 400 && checkout.status < 500);
   sleep(1);
 }

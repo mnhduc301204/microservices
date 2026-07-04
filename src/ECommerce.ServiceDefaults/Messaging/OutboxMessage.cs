@@ -16,6 +16,8 @@ public sealed class OutboxMessage
 
     public string Payload { get; private set; } = string.Empty;
 
+    public string? PartitionKey { get; private set; }
+
     public DateTimeOffset OccurredAt { get; private set; }
 
     public DateTimeOffset? ProcessedAt { get; private set; }
@@ -41,8 +43,37 @@ public sealed class OutboxMessage
             Topic = topic,
             MessageType = typeof(T).AssemblyQualifiedName ?? typeof(T).FullName ?? typeof(T).Name,
             Payload = JsonSerializer.Serialize(message, MessagingJson.Options),
+            PartitionKey = ResolvePartitionKey(message),
             OccurredAt = DateTimeOffset.UtcNow,
         };
+    }
+
+    private static string? ResolvePartitionKey<T>(T message)
+        where T : notnull
+    {
+        string[] candidateNames =
+        [
+            "OrderId",
+            "Sku",
+            "CustomerId",
+            "PaymentId",
+            "ReservationId",
+            "ProductId",
+            "EventId",
+        ];
+
+        var messageType = typeof(T);
+        foreach (var candidateName in candidateNames)
+        {
+            var property = messageType.GetProperty(candidateName);
+            var value = property?.GetValue(message);
+            if (value is not null)
+            {
+                return value.ToString();
+            }
+        }
+
+        return null;
     }
 
     public void MarkProcessed()

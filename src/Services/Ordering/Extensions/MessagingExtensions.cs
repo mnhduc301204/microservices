@@ -36,6 +36,10 @@ public static class MessagingExtensions
                 rider.AddProducer<OrderConfirmedIntegrationEvent>(KafkaTopics.OrderConfirmed);
                 rider.AddProducer<OrderCancelledIntegrationEvent>(KafkaTopics.OrderCancelled);
                 rider.AddProducer<ReleaseStockReservationIntegrationEvent>(KafkaTopics.ReleaseStockReservation);
+                rider.AddProducer<string, OrderCreatedIntegrationEvent>(KafkaTopics.OrderCreated);
+                rider.AddProducer<string, OrderConfirmedIntegrationEvent>(KafkaTopics.OrderConfirmed);
+                rider.AddProducer<string, OrderCancelledIntegrationEvent>(KafkaTopics.OrderCancelled);
+                rider.AddProducer<string, ReleaseStockReservationIntegrationEvent>(KafkaTopics.ReleaseStockReservation);
                 rider.AddConsumer<BasketCheckedOutConsumer>();
                 rider.AddConsumer<PaymentSucceededConsumer>();
                 rider.AddConsumer<PaymentFailedConsumer>();

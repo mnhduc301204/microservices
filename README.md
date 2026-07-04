@@ -26,6 +26,7 @@ This solution is a .NET Aspire e-commerce lab organized as deployable microservi
 - Shared contracts are limited to integration events and cross-service DTOs.
 - Commands that need in-process dispatch use MassTransit Mediator.
 - Cross-service workflow uses Kafka topics through MassTransit.
+- Kafka publishing uses partition keys derived from aggregate identifiers such as `OrderId`, `Sku`, `CustomerId`, `PaymentId`, or `ReservationId` when available.
 - Database-backed event publishing uses the local outbox table.
 - Event consumers claim inbox messages before processing and mark them processed after business changes are saved. Stale processing locks can be retried.
 
@@ -58,7 +59,7 @@ Run the Aspire AppHost:
 dotnet run --project src/ECommerce.AppHost/ECommerce.AppHost.csproj
 ```
 
-Aspire provisions PostgreSQL databases, Redis, Kafka, and the service projects for local development. Runtime connection strings are supplied by Aspire configuration. The local Kafka broker is configured with 12 default partitions so consumer replicas can increase throughput when topics are auto-created.
+Aspire provisions PostgreSQL databases, Redis, Kafka, and the service projects for local development. Runtime connection strings are supplied by Aspire configuration. The local Kafka broker is configured with 12 default partitions so consumer replicas can increase throughput when topics are auto-created. Events are published with stable keys where possible so related messages stay ordered inside the same partition.
 
 ## Gateway Authentication
 

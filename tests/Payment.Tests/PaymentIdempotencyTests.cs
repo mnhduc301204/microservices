@@ -1,11 +1,18 @@
 using ECommerce.Payment.Data;
+using ECommerce.Payment.Consumers;
+using ECommerce.Payment.Features.ConfirmPayment;
 using ECommerce.Payment.Features.CreatePayment;
 using ECommerce.Payment.Features.HandlePaymentWebhook;
+using ECommerce.Payment.Features.RefundPayment;
 using ECommerce.Payment.Models;
+using ECommerce.Contracts;
+using ECommerce.ServiceDefaults.Messaging;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+using MassTransit;
+using Moq;
 
 namespace ECommerce.Payment.Tests;
 
@@ -61,6 +68,105 @@ public sealed class PaymentIdempotencyTests
         result.GetType().Name.Should().Contain("Unauthorized");
     }
 
+    [Fact]
+    public async Task ConfirmPayment_WhenProviderDeclines_MarksPaymentFailedAndOutboxesFailureEvent()
+    {
+        await using var dbContext = CreateDbContext();
+        var payment = new ECommerce.Payment.Models.Payment(Guid.NewGuid(), 25m, "USD");
+        dbContext.Payments.Add(payment);
+        await dbContext.SaveChangesAsync();
+
+        await new ConfirmPaymentHandler(dbContext).Handle(
+            new ConfirmPaymentCommand(payment.Id, ShouldSucceed: false),
+            CancellationToken.None);
+
+        var updated = await dbContext.Payments.SingleAsync();
+        updated.Status.Should().Be(PaymentStatus.Failed);
+        updated.FailureReason.Should().Be("Payment was declined by fake provider.");
+
+        var outbox = await dbContext.Set<OutboxMessage>().SingleAsync();
+        outbox.Topic.Should().Be(KafkaTopics.PaymentFailed);
+        outbox.MessageType.Should().Contain("PaymentFailedIntegrationEvent");
+    }
+
+    [Fact]
+    public async Task ConfirmPayment_WhenSucceededCommandIsRetried_DoesNotOutboxDuplicateSuccessEvent()
+    {
+        await using var dbContext = CreateDbContext();
+        var payment = new ECommerce.Payment.Models.Payment(Guid.NewGuid(), 25m, "USD");
+        dbContext.Payments.Add(payment);
+        await dbContext.SaveChangesAsync();
+        var handler = new ConfirmPaymentHandler(dbContext);
+        var command = new ConfirmPaymentCommand(payment.Id);
+
+        await handler.Handle(command, CancellationToken.None);
+        await handler.Handle(command, CancellationToken.None);
+
+        (await dbContext.Payments.SingleAsync()).Status.Should().Be(PaymentStatus.Succeeded);
+        (await dbContext.Set<OutboxMessage>().CountAsync(message => message.Topic == KafkaTopics.PaymentSucceeded)).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ConfirmPayment_WhenFailureArrivesAfterSuccess_DoesNotFailPaymentOrPublishFailure()
+    {
+        await using var dbContext = CreateDbContext();
+        var payment = new ECommerce.Payment.Models.Payment(Guid.NewGuid(), 25m, "USD");
+        dbContext.Payments.Add(payment);
+        await dbContext.SaveChangesAsync();
+        var handler = new ConfirmPaymentHandler(dbContext);
+
+        await handler.Handle(new ConfirmPaymentCommand(payment.Id), CancellationToken.None);
+        await handler.Handle(new ConfirmPaymentCommand(payment.Id, ShouldSucceed: false), CancellationToken.None);
+
+        (await dbContext.Payments.SingleAsync()).Status.Should().Be(PaymentStatus.Succeeded);
+        (await dbContext.Set<OutboxMessage>().CountAsync(message => message.Topic == KafkaTopics.PaymentFailed)).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task RefundPayment_WhenPaymentIsPending_ReturnsConflictAndDoesNotCacheIdempotencyRecord()
+    {
+        await using var dbContext = CreateDbContext();
+        var payment = new ECommerce.Payment.Models.Payment(Guid.NewGuid(), 25m, "USD");
+        dbContext.Payments.Add(payment);
+        await dbContext.SaveChangesAsync();
+
+        var result = await new RefundPaymentHandler(dbContext).Handle(
+            new RefundPaymentCommand(payment.Id),
+            "refund-key-1",
+            CancellationToken.None);
+
+        result.GetType().Name.Should().Contain("Conflict");
+        (await dbContext.Set<IdempotencyRecord>().CountAsync()).Should().Be(0);
+        (await dbContext.Payments.SingleAsync()).Status.Should().Be(PaymentStatus.Pending);
+    }
+
+    [Fact]
+    public async Task StockReservedConsumer_WhenSameEventIsDeliveredTwice_CreatesSinglePaymentIntent()
+    {
+        await using var dbContext = CreateDbContext();
+        var orderId = Guid.NewGuid();
+        var eventId = Guid.NewGuid();
+        var message = new ECommerce.Contracts.Inventory.StockReservedIntegrationEvent(
+            eventId,
+            DateTimeOffset.UtcNow,
+            Guid.NewGuid(),
+            orderId,
+            Guid.NewGuid(),
+            "buyer@example.com",
+            25m,
+            [new ECommerce.Contracts.Inventory.StockReservedLine("sku-1", 1)]);
+        var consumer = new StockReservedConsumer(dbContext);
+
+        await consumer.Consume(ConsumeContextFor(message));
+        await consumer.Consume(ConsumeContextFor(message));
+
+        var payment = await dbContext.Payments.SingleAsync();
+        payment.OrderId.Should().Be(orderId);
+        payment.Status.Should().Be(PaymentStatus.Pending);
+        payment.ProviderIntentId.Should().StartWith("fake-intent-");
+        (await dbContext.Set<InboxMessage>().CountAsync()).Should().Be(1);
+    }
+
     private static PaymentDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<PaymentDbContext>()
@@ -68,6 +174,15 @@ public sealed class PaymentIdempotencyTests
             .Options;
 
         return new PaymentDbContext(options);
+    }
+
+    private static ConsumeContext<T> ConsumeContextFor<T>(T message)
+        where T : class
+    {
+        var context = new Mock<ConsumeContext<T>>();
+        context.SetupGet(item => item.Message).Returns(message);
+        context.SetupGet(item => item.CancellationToken).Returns(CancellationToken.None);
+        return context.Object;
     }
 
     private sealed class TestHostEnvironment : IHostEnvironment

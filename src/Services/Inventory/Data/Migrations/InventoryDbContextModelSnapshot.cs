@@ -249,6 +249,10 @@ namespace ECommerce.Inventory.Data.Migrations
                     b.Property<DateTimeOffset>("OccurredAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("PartitionKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<string>("Payload")
                         .IsRequired()
                         .HasColumnType("text");
