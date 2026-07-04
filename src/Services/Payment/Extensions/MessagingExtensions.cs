@@ -21,8 +21,6 @@ public static class MessagingExtensions
             bus.UsingInMemory((context, cfg) => cfg.ConfigureEndpoints(context));
             bus.AddRider(rider =>
             {
-                rider.AddProducer<PaymentSucceededIntegrationEvent>(KafkaTopics.PaymentSucceeded);
-                rider.AddProducer<PaymentFailedIntegrationEvent>(KafkaTopics.PaymentFailed);
                 rider.AddProducer<string, PaymentSucceededIntegrationEvent>(KafkaTopics.PaymentSucceeded);
                 rider.AddProducer<string, PaymentFailedIntegrationEvent>(KafkaTopics.PaymentFailed);
                 rider.AddConsumer<StockReservedConsumer>();

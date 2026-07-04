@@ -32,10 +32,6 @@ public static class MessagingExtensions
             bus.UsingInMemory((context, cfg) => cfg.ConfigureEndpoints(context));
             bus.AddRider(rider =>
             {
-                rider.AddProducer<OrderCreatedIntegrationEvent>(KafkaTopics.OrderCreated);
-                rider.AddProducer<OrderConfirmedIntegrationEvent>(KafkaTopics.OrderConfirmed);
-                rider.AddProducer<OrderCancelledIntegrationEvent>(KafkaTopics.OrderCancelled);
-                rider.AddProducer<ReleaseStockReservationIntegrationEvent>(KafkaTopics.ReleaseStockReservation);
                 rider.AddProducer<string, OrderCreatedIntegrationEvent>(KafkaTopics.OrderCreated);
                 rider.AddProducer<string, OrderConfirmedIntegrationEvent>(KafkaTopics.OrderConfirmed);
                 rider.AddProducer<string, OrderCancelledIntegrationEvent>(KafkaTopics.OrderCancelled);
