@@ -42,30 +42,36 @@ public sealed class PaymentWebhookHandler(
         var normalizedStatus = command.Status.Trim().ToUpperInvariant();
         if (normalizedStatus == "SUCCEEDED")
         {
-            payment.MarkSucceeded(command.ProviderTransactionId);
-            dbContext.Set<OutboxMessage>().Add(OutboxMessage.Create(
-                KafkaTopics.PaymentSucceeded,
-                new PaymentSucceededIntegrationEvent(
-                    Guid.NewGuid(),
-                    DateTimeOffset.UtcNow,
-                    payment.Id,
-                    payment.OrderId,
-                    Guid.Empty,
-                    command.ProviderTransactionId,
-                    payment.Amount)));
+            if (payment.Status != PaymentStatus.Succeeded)
+            {
+                payment.MarkSucceeded(command.ProviderTransactionId);
+                dbContext.Set<OutboxMessage>().Add(OutboxMessage.Create(
+                    KafkaTopics.PaymentSucceeded,
+                    new PaymentSucceededIntegrationEvent(
+                        Guid.NewGuid(),
+                        DateTimeOffset.UtcNow,
+                        payment.Id,
+                        payment.OrderId,
+                        Guid.Empty,
+                        command.ProviderTransactionId,
+                        payment.Amount)));
+            }
         }
         else if (normalizedStatus == "FAILED")
         {
-            payment.MarkFailed("Payment provider reported failure.");
-            dbContext.Set<OutboxMessage>().Add(OutboxMessage.Create(
-                KafkaTopics.PaymentFailed,
-                new PaymentFailedIntegrationEvent(
-                    Guid.NewGuid(),
-                    DateTimeOffset.UtcNow,
-                    payment.Id,
-                    payment.OrderId,
-                    Guid.Empty,
-                    "Payment provider reported failure.")));
+            if (payment.Status is not PaymentStatus.Failed and not PaymentStatus.Succeeded)
+            {
+                payment.MarkFailed("Payment provider reported failure.");
+                dbContext.Set<OutboxMessage>().Add(OutboxMessage.Create(
+                    KafkaTopics.PaymentFailed,
+                    new PaymentFailedIntegrationEvent(
+                        Guid.NewGuid(),
+                        DateTimeOffset.UtcNow,
+                        payment.Id,
+                        payment.OrderId,
+                        Guid.Empty,
+                        "Payment provider reported failure.")));
+            }
         }
         else
         {

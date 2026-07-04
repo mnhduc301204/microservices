@@ -8,6 +8,7 @@ namespace ECommerce.Basket.Data;
 public sealed class RedisBasketStore(IConnectionMultiplexer connectionMultiplexer) : IBasketStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly TimeSpan BasketTtl = TimeSpan.FromDays(7);
 
     private readonly IDatabase database = connectionMultiplexer.GetDatabase();
 
@@ -57,7 +58,7 @@ public sealed class RedisBasketStore(IConnectionMultiplexer connectionMultiplexe
                 return;
             }
 
-            await database.StringSetAsync(basketKey, JsonSerializer.Serialize(items, JsonOptions));
+            await database.StringSetAsync(basketKey, JsonSerializer.Serialize(items, JsonOptions), BasketTtl);
         }
     }
 
@@ -77,7 +78,7 @@ public sealed class RedisBasketStore(IConnectionMultiplexer connectionMultiplexe
             }
             else
             {
-                await database.StringSetAsync(key, JsonSerializer.Serialize(items, JsonOptions));
+                await database.StringSetAsync(key, JsonSerializer.Serialize(items, JsonOptions), BasketTtl);
             }
         });
     }

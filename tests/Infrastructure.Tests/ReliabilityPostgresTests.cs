@@ -2,6 +2,8 @@ using ECommerce.Contracts;
 using ECommerce.Contracts.Inventory;
 using ECommerce.Contracts.Ordering;
 using ECommerce.Contracts.Payment;
+using ECommerce.Catalog.Data;
+using ECommerce.Catalog.Models;
 using ECommerce.Inventory.Data;
 using ECommerce.Inventory.Consumers;
 using ECommerce.Inventory.Models;
@@ -551,6 +553,69 @@ public sealed class ReliabilityPostgresTests
         (await verify.Set<InboxMessage>().CountAsync()).Should().Be(1);
     }
 
+    [Fact]
+    public async Task CatalogDatabase_WhenDuplicateProductSkuIsInserted_RollsBackDuplicateAndPreservesOriginal()
+    {
+        await using var postgres = await TryStartPostgres();
+        if (postgres is null)
+        {
+            return;
+        }
+
+        var options = CatalogOptions(postgres.GetConnectionString());
+        await using (var setup = new CatalogDbContext(options))
+        {
+            await setup.Database.MigrateAsync();
+            setup.Products.Add(new Product("Bottle", "sku-1", 10m, Guid.NewGuid(), Guid.NewGuid(), null));
+            await setup.SaveChangesAsync();
+        }
+
+        await using (var dbContext = new CatalogDbContext(options))
+        {
+            dbContext.Products.Add(new Product("Duplicate Bottle", "SKU-1", 12m, Guid.NewGuid(), Guid.NewGuid(), null));
+            Func<Task> act = async () => await dbContext.SaveChangesAsync();
+
+            await act.Should().ThrowAsync<DbUpdateException>();
+        }
+
+        await using var verify = new CatalogDbContext(options);
+        (await verify.Products.CountAsync()).Should().Be(1);
+        (await verify.Products.SingleAsync()).Name.Should().Be("Bottle");
+    }
+
+    [Fact]
+    public async Task PaymentDatabase_WhenDuplicateProviderTransactionIsInserted_RejectsDuplicate()
+    {
+        await using var postgres = await TryStartPostgres();
+        if (postgres is null)
+        {
+            return;
+        }
+
+        var options = PaymentOptions(postgres.GetConnectionString());
+        await using (var setup = new PaymentDbContext(options))
+        {
+            await setup.Database.MigrateAsync();
+            var first = new ECommerce.Payment.Models.Payment(Guid.NewGuid(), 10m, "USD");
+            first.MarkSucceeded("provider-tx-1");
+            setup.Payments.Add(first);
+            await setup.SaveChangesAsync();
+        }
+
+        await using (var dbContext = new PaymentDbContext(options))
+        {
+            var duplicate = new ECommerce.Payment.Models.Payment(Guid.NewGuid(), 20m, "USD");
+            duplicate.MarkSucceeded("provider-tx-1");
+            dbContext.Payments.Add(duplicate);
+            Func<Task> act = async () => await dbContext.SaveChangesAsync();
+
+            await act.Should().ThrowAsync<DbUpdateException>();
+        }
+
+        await using var verify = new PaymentDbContext(options);
+        (await verify.Payments.CountAsync()).Should().Be(1);
+    }
+
     private static async Task<PostgreSqlContainer?> TryStartPostgres()
     {
         try
@@ -573,6 +638,11 @@ public sealed class ReliabilityPostgresTests
 
     private static DbContextOptions<InventoryDbContext> InventoryOptions(string connectionString) =>
         new DbContextOptionsBuilder<InventoryDbContext>()
+            .UseNpgsql(connectionString)
+            .Options;
+
+    private static DbContextOptions<CatalogDbContext> CatalogOptions(string connectionString) =>
+        new DbContextOptionsBuilder<CatalogDbContext>()
             .UseNpgsql(connectionString)
             .Options;
 
