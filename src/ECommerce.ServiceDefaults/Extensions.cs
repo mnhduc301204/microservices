@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using ECommerce.ServiceDefaults.Correlation;
 using ECommerce.ServiceDefaults.Security;
+using Microsoft.OpenApi;
 
 namespace ECommerce.ServiceDefaults;
 
@@ -21,7 +22,19 @@ public static class Extensions
             throw new InvalidOperationException("InternalApi:ApiKey must be configured when InternalApi:RequireInbound is enabled.");
         }
 
+        var serviceName = builder.Configuration["Swagger:ServiceName"]
+            ?? builder.Environment.ApplicationName
+            ?? "ECommerce Service";
+
         builder.Services.AddEndpointsApiExplorer();
+        builder.Services.AddSwaggerGen(options =>
+        {
+            options.SwaggerDoc("v1", new OpenApiInfo
+            {
+                Title = serviceName,
+                Version = "v1",
+            });
+        });
         builder.Services.AddHealthChecks();
         builder.Services.AddProblemDetails();
         builder.Services.AddScoped<CorrelationContext>();
@@ -40,6 +53,16 @@ public static class Extensions
     public static WebApplication MapDefaultEndpoints(this WebApplication app)
     {
         app.UseMiddleware<CorrelationMiddleware>();
+        if (app.Environment.IsDevelopment() || app.Configuration.GetValue("Swagger:Enabled", false))
+        {
+            app.UseSwagger();
+            app.UseSwaggerUI(options =>
+            {
+                options.SwaggerEndpoint("/swagger/v1/swagger.json", "v1");
+                options.RoutePrefix = "swagger";
+            });
+        }
+
         app.UseMiddleware<InternalApiKeyMiddleware>();
         app.MapHealthChecks("/health");
         app.MapHealthChecks("/alive", new HealthCheckOptions
