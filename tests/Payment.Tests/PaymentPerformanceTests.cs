@@ -14,7 +14,7 @@ public sealed class PaymentPerformanceTests
     {
         await using var dbContext = CreateDbContext();
         var handler = new CreatePaymentHandler(dbContext);
-        var command = new CreatePaymentCommand(Guid.NewGuid(), 25m);
+        var command = new CreatePaymentCommand(Guid.NewGuid(), 25m, "USD", Guid.NewGuid(), "buyer@example.com");
 
         await handler.Handle(command, "pay-key-1", CancellationToken.None);
         var started = Stopwatch.StartNew();

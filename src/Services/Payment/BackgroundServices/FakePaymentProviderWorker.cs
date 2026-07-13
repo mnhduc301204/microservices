@@ -90,8 +90,8 @@ public sealed class FakePaymentProviderWorker(
                         DateTimeOffset.UtcNow,
                         payment.Id,
                         payment.OrderId,
-                        Guid.Empty,
-                        payment.ProviderTransactionId ?? string.Empty,
+                        payment.CustomerId,
+                        payment.CustomerEmail,
                         payment.Amount)));
             }
             else
@@ -105,7 +105,7 @@ public sealed class FakePaymentProviderWorker(
                         DateTimeOffset.UtcNow,
                         payment.Id,
                         payment.OrderId,
-                        Guid.Empty,
+                        payment.CustomerId,
                         reason)));
             }
 

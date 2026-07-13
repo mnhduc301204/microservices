@@ -21,26 +21,31 @@ public sealed class CheckoutBasketHandler(IBasketStore basketStore, ITopicProduc
             return OperationResult<CheckoutBasketResponse>.Validation(validation.ToDictionary());
         }
 
-        var items = await basketStore.GetItems(command.CustomerId, cancellationToken);
-
-        if (items.Count == 0)
+        var checkout = await basketStore.GetPendingCheckout(command.CustomerId, cancellationToken);
+        if (checkout is null)
         {
-            return OperationResult<CheckoutBasketResponse>.Conflict("Cannot checkout an empty basket.");
+            var items = await basketStore.GetItems(command.CustomerId, cancellationToken);
+
+            if (items.Count == 0)
+            {
+                return OperationResult<CheckoutBasketResponse>.Conflict("Cannot checkout an empty basket.");
+            }
+
+            checkout = await basketStore.CreatePendingCheckout(command.CustomerId, Guid.NewGuid(), items, cancellationToken);
         }
 
-        var checkoutId = Guid.NewGuid();
         await producer.Produce(
             command.CustomerId.ToString(),
             new BasketCheckedOutIntegrationEvent(
-                checkoutId,
+                checkout.CheckoutId,
                 DateTimeOffset.UtcNow,
                 command.CustomerId,
                 command.CustomerEmail,
-                items.Select(item => new BasketCheckedOutLine(item.Sku, item.ProductName, item.UnitPrice, item.Quantity)).ToArray()),
+                checkout.Items.Select(item => new BasketCheckedOutLine(item.Sku, item.ProductName, item.UnitPrice, item.Quantity)).ToArray()),
             cancellationToken);
 
-        await basketStore.Clear(command.CustomerId, cancellationToken);
+        await basketStore.CompleteCheckout(command.CustomerId, checkout.CheckoutId, cancellationToken);
 
-        return OperationResult<CheckoutBasketResponse>.Accepted($"/api/basket/{command.CustomerId}", new CheckoutBasketResponse(checkoutId));
+        return OperationResult<CheckoutBasketResponse>.Accepted($"/api/basket/{command.CustomerId}", new CheckoutBasketResponse(checkout.CheckoutId));
     }
 }

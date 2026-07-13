@@ -34,7 +34,13 @@ public sealed class CreatePaymentHandler(PaymentDbContext dbContext)
             return Results.Ok(new CreatePaymentResponse(existing.Id, existing.OrderId, existing.Status));
         }
 
-        var payment = new Models.Payment(command.OrderId, command.Amount, command.Currency, idempotencyKey);
+        var payment = new Models.Payment(
+            command.OrderId,
+            command.Amount,
+            command.Currency,
+            idempotencyKey,
+            command.CustomerId,
+            command.CustomerEmail);
         dbContext.Payments.Add(payment);
         var response = new CreatePaymentResponse(payment.Id, payment.OrderId, payment.Status);
         if (!string.IsNullOrWhiteSpace(idempotencyKey))

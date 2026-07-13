@@ -18,6 +18,42 @@ public sealed class RedisBasketStore(IConnectionMultiplexer connectionMultiplexe
         return Deserialize(value);
     }
 
+    public async Task<BasketCheckoutState?> GetPendingCheckout(Guid customerId, CancellationToken cancellationToken)
+    {
+        var value = await database.StringGetAsync(GetCheckoutKey(customerId));
+        if (value.IsNullOrEmpty)
+        {
+            return null;
+        }
+
+        return JsonSerializer.Deserialize<BasketCheckoutState>(value.ToString(), JsonOptions);
+    }
+
+    public async Task<BasketCheckoutState> CreatePendingCheckout(
+        Guid customerId,
+        Guid checkoutId,
+        IReadOnlyCollection<BasketItemDto> items,
+        CancellationToken cancellationToken)
+    {
+        var checkoutKey = GetCheckoutKey(customerId);
+        BasketCheckoutState checkout = null!;
+
+        await WithLock(customerId, async () =>
+        {
+            var existing = await database.StringGetAsync(checkoutKey);
+            if (!existing.IsNullOrEmpty)
+            {
+                checkout = JsonSerializer.Deserialize<BasketCheckoutState>(existing.ToString(), JsonOptions)!;
+                return;
+            }
+
+            checkout = new BasketCheckoutState(checkoutId, items.Select(item => item with { }).ToArray());
+            await database.StringSetAsync(checkoutKey, JsonSerializer.Serialize(checkout, JsonOptions), BasketTtl);
+        });
+
+        return checkout;
+    }
+
     public async Task<BasketItemDto> AddOrUpdateItem(Guid customerId, string sku, string productName, decimal unitPrice, int quantity, CancellationToken cancellationToken)
     {
         var normalizedSku = BasketItem.NormalizeSku(sku);
@@ -86,6 +122,57 @@ public sealed class RedisBasketStore(IConnectionMultiplexer connectionMultiplexe
     public Task Clear(Guid customerId, CancellationToken cancellationToken) =>
         database.KeyDeleteAsync(GetKey(customerId));
 
+    public async Task CompleteCheckout(Guid customerId, Guid checkoutId, CancellationToken cancellationToken)
+    {
+        await WithLock(customerId, async () =>
+        {
+            var checkoutKey = GetCheckoutKey(customerId);
+            var checkoutValue = await database.StringGetAsync(checkoutKey);
+            if (checkoutValue.IsNullOrEmpty)
+            {
+                return;
+            }
+
+            var checkout = JsonSerializer.Deserialize<BasketCheckoutState>(checkoutValue.ToString(), JsonOptions);
+            if (checkout is null || checkout.CheckoutId != checkoutId)
+            {
+                return;
+            }
+
+            var basketKey = GetKey(customerId);
+            var currentItems = Deserialize(await database.StringGetAsync(basketKey)).ToList();
+            foreach (var checkedOutItem in checkout.Items)
+            {
+                var index = currentItems.FindIndex(item => item.Sku == checkedOutItem.Sku);
+                if (index < 0)
+                {
+                    continue;
+                }
+
+                var remainingQuantity = currentItems[index].Quantity - checkedOutItem.Quantity;
+                if (remainingQuantity <= 0)
+                {
+                    currentItems.RemoveAt(index);
+                }
+                else
+                {
+                    currentItems[index] = currentItems[index] with { Quantity = remainingQuantity };
+                }
+            }
+
+            if (currentItems.Count == 0)
+            {
+                await database.KeyDeleteAsync(basketKey);
+            }
+            else
+            {
+                await database.StringSetAsync(basketKey, JsonSerializer.Serialize(currentItems, JsonOptions), BasketTtl);
+            }
+
+            await database.KeyDeleteAsync(checkoutKey);
+        });
+    }
+
     private async Task WithLock(Guid customerId, Func<Task> action)
     {
         var lockKey = $"basket:{customerId}:lock";
@@ -107,6 +194,8 @@ public sealed class RedisBasketStore(IConnectionMultiplexer connectionMultiplexe
     }
 
     private static RedisKey GetKey(Guid customerId) => $"basket:{customerId}";
+
+    private static RedisKey GetCheckoutKey(Guid customerId) => $"basket:{customerId}:checkout";
 
     private static IReadOnlyCollection<BasketItemDto> Deserialize(RedisValue value)
     {

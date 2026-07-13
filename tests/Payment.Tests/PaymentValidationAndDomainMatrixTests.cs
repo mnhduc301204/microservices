@@ -131,7 +131,7 @@ public sealed class PaymentValidationAndDomainMatrixTests
 
     public static TheoryData<CreatePaymentCommand, bool> CreatePaymentCommands()
     {
-        var valid = new CreatePaymentCommand(Guid.NewGuid(), 10m, "USD");
+        var valid = new CreatePaymentCommand(Guid.NewGuid(), 10m, "USD", Guid.NewGuid(), "buyer@example.com");
         var data = new TheoryData<CreatePaymentCommand, bool>();
         data.Add(valid, true);
         data.Add(valid with { OrderId = Guid.Empty }, false);

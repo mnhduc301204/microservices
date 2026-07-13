@@ -19,6 +19,7 @@ public sealed class PaymentDbContext(DbContextOptions<PaymentDbContext> options)
             builder.HasKey(payment => payment.Id);
             builder.Property(payment => payment.Amount).HasPrecision(18, 2);
             builder.Property(payment => payment.Currency).HasMaxLength(3).IsRequired();
+            builder.Property(payment => payment.CustomerEmail).HasMaxLength(320).IsRequired();
             builder.Property(payment => payment.IdempotencyKey).HasMaxLength(200);
             builder.Property(payment => payment.ProviderIntentId).HasMaxLength(200);
             builder.Property(payment => payment.ProviderLockedBy).HasMaxLength(200);

@@ -1,5 +1,6 @@
 using ECommerce.Payment.Data;
 using ECommerce.Payment.Consumers;
+using ECommerce.Payment.BackgroundServices;
 using ECommerce.Payment.Features.ConfirmPayment;
 using ECommerce.Payment.Features.CreatePayment;
 using ECommerce.Payment.Features.HandlePaymentWebhook;
@@ -13,6 +14,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using MassTransit;
 using Moq;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using System.Reflection;
 
 namespace ECommerce.Payment.Tests;
 
@@ -23,7 +27,7 @@ public sealed class PaymentIdempotencyTests
     {
         await using var dbContext = CreateDbContext();
         var handler = new CreatePaymentHandler(dbContext);
-        var command = new CreatePaymentCommand(Guid.NewGuid(), 25m);
+        var command = new CreatePaymentCommand(Guid.NewGuid(), 25m, "USD", Guid.NewGuid(), "buyer@example.com");
 
         await handler.Handle(command, "pay-key-1", CancellationToken.None);
         await handler.Handle(command, "pay-key-1", CancellationToken.None);
@@ -138,6 +142,58 @@ public sealed class PaymentIdempotencyTests
         result.GetType().Name.Should().Contain("Conflict");
         (await dbContext.Set<IdempotencyRecord>().CountAsync()).Should().Be(0);
         (await dbContext.Payments.SingleAsync()).Status.Should().Be(PaymentStatus.Pending);
+    }
+
+    [Fact]
+    public async Task PaymentRefundRequestedConsumer_WhenPaymentSucceeded_RefundsAndOutboxesOnce()
+    {
+        await using var dbContext = CreateDbContext();
+        var customerId = Guid.NewGuid();
+        var payment = new ECommerce.Payment.Models.Payment(Guid.NewGuid(), 25m, "USD");
+        payment.MarkSucceeded("provider-tx-1");
+        dbContext.Payments.Add(payment);
+        await dbContext.SaveChangesAsync();
+
+        var message = new ECommerce.Contracts.Payment.PaymentRefundRequestedIntegrationEvent(
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            payment.Id,
+            payment.OrderId,
+            customerId,
+            "Order was already failed.");
+        var consumer = new PaymentRefundRequestedConsumer(dbContext);
+
+        await consumer.Consume(ConsumeContextFor(message));
+        await consumer.Consume(ConsumeContextFor(message));
+
+        (await dbContext.Payments.SingleAsync()).Status.Should().Be(PaymentStatus.Refunded);
+        (await dbContext.Set<OutboxMessage>().CountAsync(outbox => outbox.Topic == KafkaTopics.PaymentRefunded)).Should().Be(1);
+        (await dbContext.Set<InboxMessage>().CountAsync()).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task PaymentOutboxRepairService_WhenSucceededPaymentHasNoOutbox_RecreatesSuccessEvent()
+    {
+        await using var dbContext = CreateDbContext();
+        var payment = new ECommerce.Payment.Models.Payment(Guid.NewGuid(), 25m, "USD");
+        payment.MarkSucceeded("provider-tx-1");
+        dbContext.Payments.Add(payment);
+        await dbContext.SaveChangesAsync();
+        var services = new ServiceCollection();
+        services.AddSingleton(dbContext);
+        await using var provider = services.BuildServiceProvider();
+        var repairService = new PaymentOutboxRepairService(
+            provider,
+            NullLogger<PaymentOutboxRepairService>.Instance);
+        var method = typeof(PaymentOutboxRepairService)
+            .GetMethod("RepairBatch", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("RepairBatch method was not found.");
+
+        await (Task)method.Invoke(repairService, [CancellationToken.None])!;
+
+        var outbox = await dbContext.Set<OutboxMessage>().SingleAsync();
+        outbox.Topic.Should().Be(KafkaTopics.PaymentSucceeded);
+        outbox.Payload.Should().Contain(payment.Id.ToString());
     }
 
     [Fact]

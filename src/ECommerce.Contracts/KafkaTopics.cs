@@ -12,4 +12,6 @@ public static class KafkaTopics
     public const string ReleaseStockReservation = "inventory.release-stock-reservation";
     public const string PaymentSucceeded = "payment.payment-succeeded";
     public const string PaymentFailed = "payment.payment-failed";
+    public const string PaymentRefundRequested = "payment.refund-requested";
+    public const string PaymentRefunded = "payment.refunded";
 }

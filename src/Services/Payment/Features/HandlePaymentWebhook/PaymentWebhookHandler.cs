@@ -52,8 +52,8 @@ public sealed class PaymentWebhookHandler(
                         DateTimeOffset.UtcNow,
                         payment.Id,
                         payment.OrderId,
-                        Guid.Empty,
-                        command.ProviderTransactionId,
+                        payment.CustomerId,
+                        payment.CustomerEmail,
                         payment.Amount)));
             }
         }
@@ -69,7 +69,7 @@ public sealed class PaymentWebhookHandler(
                         DateTimeOffset.UtcNow,
                         payment.Id,
                         payment.OrderId,
-                        Guid.Empty,
+                        payment.CustomerId,
                         "Payment provider reported failure.")));
             }
         }

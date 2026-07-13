@@ -230,7 +230,7 @@ public sealed class ReliabilityPostgresTests
         var options = MessagingOptions(connectionString);
         await using (var setup = new MessagingReliabilityDbContext(options))
         {
-            await setup.Database.MigrateAsync();
+            await setup.Database.EnsureCreatedAsync();
         }
 
         var eventId = Guid.NewGuid();
@@ -254,7 +254,7 @@ public sealed class ReliabilityPostgresTests
         var options = MessagingOptions(connectionString);
         await using (var setup = new MessagingReliabilityDbContext(options))
         {
-            await setup.Database.MigrateAsync();
+            await setup.Database.EnsureCreatedAsync();
         }
 
         var eventId = Guid.NewGuid();
@@ -295,7 +295,7 @@ public sealed class ReliabilityPostgresTests
             [new OrderCreatedLine("sku-1", "Bottle", 10m, 1)]);
         await using (var setup = new MessagingReliabilityDbContext(options))
         {
-            await setup.Database.MigrateAsync();
+            await setup.Database.EnsureCreatedAsync();
             setup.Set<OutboxMessage>().Add(OutboxMessage.Create(KafkaTopics.OrderCreated, orderCreated));
             await setup.SaveChangesAsync();
         }
@@ -328,7 +328,7 @@ public sealed class ReliabilityPostgresTests
         var options = MessagingOptions(connectionString);
         await using (var setup = new MessagingReliabilityDbContext(options))
         {
-            await setup.Database.MigrateAsync();
+            await setup.Database.EnsureCreatedAsync();
             setup.Set<OutboxMessage>().Add(OutboxMessage.Create(
                 KafkaTopics.OrderCreated,
                 new OrderCreatedIntegrationEvent(
@@ -395,6 +395,54 @@ public sealed class ReliabilityPostgresTests
     }
 
     [Fact]
+    public async Task InventoryOrderConfirmedConsumer_WhenSameConfirmationIsDeliveredTwice_DeductsReservedStockOnce()
+    {
+        await using var postgres = await TryStartPostgres();
+        if (postgres is null)
+        {
+            return;
+        }
+
+        var options = InventoryOptions(postgres.GetConnectionString());
+        var reservationId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        await using (var setup = new InventoryDbContext(options))
+        {
+            await setup.Database.MigrateAsync();
+            var item = new InventoryItem("SKU-1", 10);
+            item.TryReserve(4);
+            setup.Items.Add(item);
+            setup.Reservations.Add(new StockReservation(reservationId, "SKU-1", 4, orderId));
+            await setup.SaveChangesAsync();
+        }
+
+        var confirmed = new OrderConfirmedIntegrationEvent(
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            orderId,
+            customerId,
+            40m);
+        await using (var dbContext = new InventoryDbContext(options))
+        {
+            var consumer = new ECommerce.Inventory.Consumers.OrderConfirmedConsumer(dbContext);
+            await consumer.Consume(ConsumeContextFor(confirmed));
+            await consumer.Consume(ConsumeContextFor(confirmed));
+        }
+
+        await using var verify = new InventoryDbContext(options);
+        var itemAfterDeduct = await verify.Items.SingleAsync();
+        itemAfterDeduct.QuantityOnHand.Should().Be(6);
+        itemAfterDeduct.QuantityReserved.Should().Be(0);
+
+        var reservation = await verify.Reservations.SingleAsync();
+        reservation.Status.Should().Be(StockReservationStatus.Deducted);
+        reservation.CompletedAt.Should().NotBeNull();
+        (await verify.StockMovements.CountAsync(movement => movement.Type == StockMovementType.Deducted)).Should().Be(1);
+        (await verify.Set<InboxMessage>().CountAsync()).Should().Be(1);
+    }
+
+    [Fact]
     public async Task OrderingPaymentSucceededConsumer_WhenSameEventIsDeliveredTwice_ConfirmsAndOutboxesOnce()
     {
         await using var postgres = await TryStartPostgres();
@@ -438,7 +486,7 @@ public sealed class ReliabilityPostgresTests
     }
 
     [Fact]
-    public async Task OrderingPaymentSucceededConsumer_WhenOrderAlreadyFailed_DoesNotReopenOrderOrPublishConfirmed()
+    public async Task OrderingPaymentSucceededConsumer_WhenOrderAlreadyFailed_DoesNotReopenOrderAndRequestsRefund()
     {
         await using var postgres = await TryStartPostgres();
         if (postgres is null)
@@ -474,7 +522,8 @@ public sealed class ReliabilityPostgresTests
 
         await using var verify = new OrderingDbContext(options);
         (await verify.Orders.SingleAsync()).Status.Should().Be(OrderStatus.Failed);
-        (await verify.Set<OutboxMessage>().AnyAsync()).Should().BeFalse();
+        (await verify.Set<OutboxMessage>().CountAsync(message => message.Topic == KafkaTopics.OrderConfirmed)).Should().Be(0);
+        (await verify.Set<OutboxMessage>().CountAsync(message => message.Topic == KafkaTopics.PaymentRefundRequested)).Should().Be(1);
     }
 
     [Fact]

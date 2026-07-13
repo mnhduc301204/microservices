@@ -33,7 +33,9 @@ public sealed class ReservationExpiryService(
         var now = DateTimeOffset.UtcNow;
 
         var reservationIds = await dbContext.Reservations
-            .Where(reservation => reservation.Status == StockReservationStatus.Reserved && reservation.ExpiresAt <= now)
+            .Where(reservation =>
+                reservation.Status == StockReservationStatus.Reserved
+                && reservation.ExpiresAt <= now)
             .OrderBy(reservation => reservation.ExpiresAt)
             .Take(100)
             .Select(reservation => reservation.Id)

@@ -38,8 +38,8 @@ public sealed class ConfirmPaymentHandler(PaymentDbContext dbContext)
                     DateTimeOffset.UtcNow,
                     payment.Id,
                     payment.OrderId,
-                    Guid.Empty,
-                    string.Empty,
+                    payment.CustomerId,
+                    payment.CustomerEmail,
                     payment.Amount)));
         }
         else
@@ -57,7 +57,7 @@ public sealed class ConfirmPaymentHandler(PaymentDbContext dbContext)
                     DateTimeOffset.UtcNow,
                     payment.Id,
                     payment.OrderId,
-                    Guid.Empty,
+                    payment.CustomerId,
                     "Payment was declined by fake provider.")));
         }
 

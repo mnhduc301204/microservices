@@ -18,6 +18,7 @@ public static class MessagingExtensions
         builder.Services.AddMassTransit(bus =>
         {
             bus.AddConsumer<OrderCreatedConsumer>();
+            bus.AddConsumer<OrderConfirmedConsumer>();
             bus.AddConsumer<ReleaseStockReservationConsumer>();
             bus.UsingInMemory((context, cfg) => cfg.ConfigureEndpoints(context));
             bus.AddRider(rider =>
@@ -25,6 +26,7 @@ public static class MessagingExtensions
                 rider.AddProducer<string, StockReservedIntegrationEvent>(KafkaTopics.StockReserved);
                 rider.AddProducer<string, StockReservationFailedIntegrationEvent>(KafkaTopics.StockReservationFailed);
                 rider.AddConsumer<OrderCreatedConsumer>();
+                rider.AddConsumer<OrderConfirmedConsumer>();
                 rider.AddConsumer<ReleaseStockReservationConsumer>();
                 rider.UsingKafka((context, kafka) =>
                 {
@@ -33,6 +35,11 @@ public static class MessagingExtensions
                     {
                         endpoint.UseMessageRetry(retry => retry.Exponential(5, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(2)));
                         endpoint.ConfigureConsumer<OrderCreatedConsumer>(context);
+                    });
+                    kafka.TopicEndpoint<OrderConfirmedIntegrationEvent>(KafkaTopics.OrderConfirmed, "inventory-service", endpoint =>
+                    {
+                        endpoint.UseMessageRetry(retry => retry.Exponential(5, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(2)));
+                        endpoint.ConfigureConsumer<OrderConfirmedConsumer>(context);
                     });
                     kafka.TopicEndpoint<ReleaseStockReservationIntegrationEvent>(KafkaTopics.ReleaseStockReservation, "inventory-service", endpoint =>
                     {

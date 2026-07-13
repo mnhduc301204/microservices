@@ -6,12 +6,14 @@ public sealed class Payment
     {
     }
 
-    public Payment(Guid orderId, decimal amount, string currency, string? idempotencyKey = null)
+    public Payment(Guid orderId, decimal amount, string currency, string? idempotencyKey = null, Guid customerId = default, string? customerEmail = null)
     {
         OrderId = orderId == Guid.Empty ? throw new ArgumentException("Order id is required.", nameof(orderId)) : orderId;
         Amount = amount <= 0 ? throw new ArgumentOutOfRangeException(nameof(amount), "Payment amount must be positive.") : amount;
         Currency = string.IsNullOrWhiteSpace(currency) ? "USD" : currency.Trim().ToUpperInvariant();
         IdempotencyKey = string.IsNullOrWhiteSpace(idempotencyKey) ? null : idempotencyKey.Trim();
+        CustomerId = customerId;
+        CustomerEmail = string.IsNullOrWhiteSpace(customerEmail) ? string.Empty : customerEmail.Trim();
         Status = PaymentStatus.Pending;
         CreatedAt = DateTimeOffset.UtcNow;
     }
@@ -19,6 +21,10 @@ public sealed class Payment
     public Guid Id { get; private set; } = Guid.NewGuid();
 
     public Guid OrderId { get; private set; }
+
+    public Guid CustomerId { get; private set; }
+
+    public string CustomerEmail { get; private set; } = string.Empty;
 
     public decimal Amount { get; private set; }
 
@@ -91,6 +97,11 @@ public sealed class Payment
 
     public void Refund()
     {
+        if (Status == PaymentStatus.Refunded)
+        {
+            return;
+        }
+
         if (Status != PaymentStatus.Succeeded)
         {
             throw new InvalidOperationException("Only succeeded payments can be refunded.");
